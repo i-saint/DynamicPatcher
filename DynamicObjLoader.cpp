@@ -1,5 +1,5 @@
 ﻿#include "DynamicObjLoader.h"
-#ifdef DOL_Enable_Dynamic_Link
+#ifndef DOL_Static_Link
 
 #include <windows.h>
 #include <imagehlp.h>
@@ -13,7 +13,7 @@
 #pragma warning(disable: 4073) // init_seg(lib) は普通は使っちゃダメ的な warning
 #pragma init_seg(lib) // global オブジェクトの初期化の優先順位上げる
 
-namespace rlcpp {
+namespace dol {
 
 namespace stl = std;
 
@@ -186,6 +186,12 @@ void ObjFile::unload()
     m_symbols.clear();
 }
 
+
+inline const char* GetSymbolName(PSTR StringTable, PIMAGE_SYMBOL Sym)
+{
+    return Sym->N.Name.Short!=0 ? (const char*)&Sym->N.ShortName : (const char*)(StringTable + Sym->N.Name.Long);
+}
+
 bool ObjFile::load(const stl::string &path)
 {
     m_filepath = path;
@@ -210,12 +216,12 @@ bool ObjFile::load(const stl::string &path)
     PSTR StringTable = (PSTR)&pSymbolTable[SymbolCount];
 
     for( size_t i=0; i < SymbolCount; ++i ) {
-        IMAGE_SYMBOL &sym = pSymbolTable[i];
-        if(sym.N.Name.Short == 0 && sym.SectionNumber>0) {
-            IMAGE_SECTION_HEADER &sect = pSectionHeader[sym.SectionNumber-1];
-            const char *name = (const char*)(StringTable + sym.N.Name.Long);
-            void *data = (void*)(ImageBase + sect.PointerToRawData + sym.Value);
-            if(sym.SectionNumber!=IMAGE_SYM_UNDEFINED) {
+        PIMAGE_SYMBOL sym = pSymbolTable + i;
+        const char *name = GetSymbolName(StringTable, sym);
+        if(sym->SectionNumber>0) {
+            IMAGE_SECTION_HEADER &sect = pSectionHeader[sym->SectionNumber-1];
+            void *data = (void*)(ImageBase + sect.PointerToRawData + sym->Value);
+            if(sym->SectionNumber!=IMAGE_SYM_UNDEFINED) {
                 MakeExecutable(data, sect.SizeOfRawData);
                 m_symbols[name] = data;
             }
@@ -240,21 +246,22 @@ void ObjFile::link()
     PSTR StringTable = (PSTR)&pSymbolTable[SymbolCount];
 
     for( size_t i=0; i < SymbolCount; ++i ) {
-        IMAGE_SYMBOL &sym = pSymbolTable[i];
-        if(sym.N.Name.Short == 0 && sym.SectionNumber>0) {
-            IMAGE_SECTION_HEADER &sect = pSectionHeader[sym.SectionNumber-1];
-            const char *name = (const char*)(StringTable + sym.N.Name.Long);
-            size_t SectionBase = (size_t)(ImageBase + sect.PointerToRawData + sym.Value);
+        PIMAGE_SYMBOL sym = pSymbolTable + i;
+        const char *name = GetSymbolName(StringTable, sym);
+
+        if(sym->SectionNumber>0) {
+            IMAGE_SECTION_HEADER &sect = pSectionHeader[sym->SectionNumber-1];
+            size_t SectionBase = (size_t)(ImageBase + sect.PointerToRawData + sym->Value);
 
             DWORD NumRelocations = sect.NumberOfRelocations;
             PIMAGE_RELOCATION pRelocation = (PIMAGE_RELOCATION)(ImageBase + sect.PointerToRelocations);
             for(size_t ri=0; ri<NumRelocations; ++ri) {
                 PIMAGE_RELOCATION pReloc = pRelocation + ri;
                 PIMAGE_SYMBOL rsym = pSymbolTable + pReloc->SymbolTableIndex;
-                const char *rname = (const char*)(StringTable + rsym->N.Name.Long);
+                const char *rname = GetSymbolName(StringTable, rsym);
                 void *rdata = m_loader->resolveExternalSymbol(rname);
                 if(rdata==NULL) {
-                    istPrint("RLCPP error: %s のシンボル %s を解決できませんでした。\n", m_filepath.c_str(), rname);
+                    istPrint("DOL error: %s が参照するシンボル %s を解決できませんでした。\n", m_filepath.c_str(), rname);
                     DebugBreak();
                     continue;
                 }
@@ -388,9 +395,9 @@ public:
 
 } g_dol_init;
 
-} // namespace rlcpp
+} // namespace dol
 
-using namespace rlcpp;
+using namespace dol;
 
 void  DOL_Load(const char *path)
 {
@@ -417,4 +424,4 @@ void DOL_LinkSymbol(const char *name, void *&target)
     m_objloader->addSymbolLink(name, target);
 }
 
-#endif // DOL_Enable_Dynamic_Link
+#endif // DOL_Static_Link
