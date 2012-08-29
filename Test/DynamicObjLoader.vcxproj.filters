@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="stdafx.h">
+      <Filter>Test</Filter>
+    </ClInclude>
+    <ClInclude Include="targetver.h">
+      <Filter>Test</Filter>
+    </ClInclude>
+    <ClInclude Include="Test.h">
+      <Filter>Test</Filter>
+    </ClInclude>
+    <ClInclude Include="..\DynamicObjLoader.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="stdafx.cpp">
+      <Filter>Test</Filter>
+    </ClCompile>
+    <ClCompile Include="Test.cpp">
+      <Filter>Test</Filter>
+    </ClCompile>
+    <ClCompile Include="..\DynamicObjLoader.cpp" />
+    <ClCompile Include="TestObj.cpp">
+      <Filter>Test</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Test">
+      <UniqueIdentifier>{cec1ea66-648c-473f-a8c5-0b4e4a7f6a64}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
