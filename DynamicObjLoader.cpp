@@ -339,8 +339,8 @@ void DynamicObjLoader::load( const stl::string &path )
     loader->eachSymbol([&](const stl::string &name, void *data){ m_symbols.insert(stl::make_pair(name, data)); });
 }
 
-inline void CallOnLoadHandler(ObjFile *obj)   { if(Handler h=(Handler)obj->findSymbol("_DOL_OnLoadHandler")) { h(); } }
-inline void CallOnUnloadHandler(ObjFile *obj) { if(Handler h=(Handler)obj->findSymbol("_DOL_OnUnloadHandler")) { h(); } }
+inline void CallOnLoadHandler(ObjFile *obj)   { if(Handler h=(Handler)obj->findSymbol(DOL_Symbol_Prefix "DOL_OnLoadHandler")) { h(); } }
+inline void CallOnUnloadHandler(ObjFile *obj) { if(Handler h=(Handler)obj->findSymbol(DOL_Symbol_Prefix "DOL_OnUnloadHandler")) { h(); } }
 
 void DynamicObjLoader::link()
 {

@@ -36,6 +36,12 @@
 #endif
 
 #ifndef DOL_Static_Link
+#ifdef _WIN64
+#   define DOL_Symbol_Prefix
+#else // _WIN64
+#   define DOL_Symbol_Prefix "_"
+#endif // _WIN64
+
 
 // obj 側で使います。親 process から参照されるシンボルにつけます。mangling 問題を解決するためのもの
 #define DOL_ObjExport   extern "C"
@@ -57,11 +63,7 @@
 #define DOL_DeclareObjFunc(ret, name, ...)  extern ret (*name)(__VA_ARGS__)
 
 // exe 側で使います。.obj の関数の定義
-#ifdef _WIN64
-#   define DOL_ObjFunc(ret, name, ...) ret (*name)(__VA_ARGS__)=NULL; DOL_FunctionLink g_rlcpp_link_##name##(name, #name)
-#else // _WIN64
-#   define DOL_ObjFunc(ret, name, ...) ret (*name)(__VA_ARGS__)=NULL; DOL_FunctionLink g_rlcpp_link_##name##(name, "_" #name)
-#endif // _WIN64
+#define DOL_ObjFunc(ret, name, ...) ret (*name)(__VA_ARGS__)=NULL; DOL_FunctionLink g_rlcpp_link_##name##(name, DOL_Symbol_Prefix #name)
 
 // exe 側で使います。.obj の変数の定義
 #define DOL_ObjValue(type, name)    type *name=NULL
