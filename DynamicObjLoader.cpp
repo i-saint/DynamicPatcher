@@ -72,12 +72,11 @@ void GetExeModuleName(char *o_name)
 bool MapFile(const stl::string &path, void *&o_data, size_t &o_size)
 {
     // jmp 命令などの移動量は x64 でも 32bit なため、32bit に収まらない距離を飛ぼうとした場合あらぬところに着地して死ぬ。
-    // なので .obj と .exe のメモリ上の距離が 32bit に収まるようにする。
-    // 具体的には .exe がマップされている領域を調べ、その近くに .obj のマップ領域を VirtualAlloc() する。
-    // (ちなみに通常はリンカがリンク時に命令を修正して解決している様子)
+    // new や malloc() だと 32bit に収まらない遥か彼方にメモリが確保されてしまうため、
+    // .exe がマップされている領域を調べ、その近くに .obj をマップする領域を VirtualAlloc() してやる必要がある。
     char exefilename[MAX_PATH];
     GetExeModuleName(exefilename);
-    HMODULE exe = GetModuleHandleA(exefilename);
+    size_t exe_base = (size_t)GetModuleHandleA(exefilename);
 
     o_data = NULL;
     o_size = 0;
@@ -88,8 +87,9 @@ bool MapFile(const stl::string &path, void *&o_data, size_t &o_size)
             // ドキュメントには、アドレス指定の VirtualAlloc() は指定先が既に予約されている場合最寄りの領域を返す、
             // と書いてるように見えるが、実際には NULL が返ってくるようにしか見えない。
             // なので成功するまでアドレスを進めつつリトライ…。
+            const size_t step = 0x10000; // 64kb
             for(size_t i=0; o_data==NULL; ++i) {
-                o_data = ::VirtualAlloc((void*)((size_t)exe+(0x10000*i)), o_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+                o_data = ::VirtualAlloc((void*)((size_t)exe_base+(step*i)), o_size, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
             }
             fseek(f, 0, SEEK_SET);
             fread(o_data, 1, o_size, f);
@@ -230,6 +230,9 @@ bool ObjFile::load(const stl::string &path)
         return false;
     }
 
+    DWORD old_protect_flag;
+    ::VirtualProtect((LPVOID)m_data, m_datasize, PAGE_READONLY, &old_protect_flag);
+
     // 以下 symbol 収集処理
     PIMAGE_FILE_HEADER pImageHeader = (PIMAGE_FILE_HEADER)ImageBase;
     PIMAGE_OPTIONAL_HEADER *pOptionalHeader = (PIMAGE_OPTIONAL_HEADER*)(pImageHeader+1);
@@ -259,6 +262,9 @@ bool ObjFile::load(const stl::string &path)
 // 外部シンボルのリンケージ解決
 void ObjFile::link()
 {
+    DWORD old_protect_flag;
+    ::VirtualProtect((LPVOID)m_data, m_datasize, PAGE_READWRITE, &old_protect_flag);
+
     size_t ImageBase = (size_t)(m_data);
     PIMAGE_FILE_HEADER pImageHeader = (PIMAGE_FILE_HEADER)ImageBase;
     PIMAGE_OPTIONAL_HEADER *pOptionalHeader = (PIMAGE_OPTIONAL_HEADER*)(pImageHeader+1);
@@ -305,6 +311,9 @@ void ObjFile::link()
         }
         i += pSymbolTable[i].NumberOfAuxSymbols;
     }
+
+    // 安全のため書き込み禁止にしておく
+    ::VirtualProtect((LPVOID)m_data, m_datasize, PAGE_EXECUTE_READ, &old_protect_flag);
 }
 
 void* ObjFile::findSymbol(const char *name)
