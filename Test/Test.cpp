@@ -56,7 +56,11 @@ DOL_ObjFunc(IHoge*, CreateObjHoge);
 
 int main(int argc, _TCHAR* argv[])
 {
+#ifdef _WIN64
+    DOL_Load("TestObj64.obj");
+#else // _WIN64
     DOL_Load("TestObj.obj");
+#endif // _WIN64
     DOL_Link();
 
     istPrint("%.2f\n", FloatAdd(1.0f, 2.0f));

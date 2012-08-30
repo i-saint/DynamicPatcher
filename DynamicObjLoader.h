@@ -28,6 +28,8 @@
 #define __DynamicObjLoader_h__
 
 
+//#define DOL_Static_Link
+
 // 一応非 Windows でもビルドエラーにはならないようにしておく
 #if !defined(_WIN32) && !defined(DOL_Static_Link)
 #   define DOL_Static_Link
@@ -55,7 +57,11 @@
 #define DOL_DeclareObjFunc(ret, name, ...)  extern ret (*name)(__VA_ARGS__)
 
 // exe 側で使います。.obj の関数の定義
-#define DOL_ObjFunc(ret, name, ...) ret (*name)(__VA_ARGS__)=NULL; DOL_FunctionLink g_rlcpp_link_##name##(name, "_" #name)
+#ifdef _WIN64
+#   define DOL_ObjFunc(ret, name, ...) ret (*name)(__VA_ARGS__)=NULL; DOL_FunctionLink g_rlcpp_link_##name##(name, #name)
+#else // _WIN64
+#   define DOL_ObjFunc(ret, name, ...) ret (*name)(__VA_ARGS__)=NULL; DOL_FunctionLink g_rlcpp_link_##name##(name, "_" #name)
+#endif // _WIN64
 
 // exe 側で使います。.obj の変数の定義
 #define DOL_ObjValue(type, name)    type *name=NULL

@@ -52,26 +52,52 @@ bool InitializeDebugSymbol(HANDLE proc=::GetCurrentProcess())
     return true;
 }
 
-bool MapFile(const stl::string &path, stl::vector<char> &data)
+void GetExeModuleName(char *o_name)
 {
+    size_t i = 0;
+    const char *exefullpath = __argv[0];
+    for(;;) {
+        if(exefullpath[i]==0) { break; }
+        if(exefullpath[i]=='\\') {
+            exefullpath += i+1;
+            i = 0;
+            continue;
+        }
+        o_name[i] = exefullpath[i];
+        ++i;
+    }
+    o_name[i] = 0;
+}
+
+bool MapFile(const stl::string &path, void *&o_data, size_t &o_size)
+{
+    // jmp 命令などの移動量は x64 でも 32bit なため、32bit に収まらない距離を飛ぼうとした場合あらぬところに着地して死ぬ。
+    // なので .obj と .exe のメモリ上の距離が 32bit に収まるようにする。
+    // 具体的には .exe がマップされている領域を調べ、その近くに .obj のマップ領域を VirtualAlloc() する。
+    // (ちなみに通常はリンカがリンク時に命令を修正して解決している様子)
+    char exefilename[MAX_PATH];
+    GetExeModuleName(exefilename);
+    HMODULE exe = GetModuleHandleA(exefilename);
+
+    o_data = NULL;
+    o_size = 0;
     if(FILE *f=fopen(path.c_str(), "rb")) {
         fseek(f, 0, SEEK_END);
-        size_t size = ftell(f);
-        if(size > 0) {
-            data.resize(size);
+        o_size = ftell(f);
+        if(o_size > 0) {
+            // ドキュメントには、アドレス指定の VirtualAlloc() は指定先が既に予約されている場合最寄りの領域を返す、
+            // と書いてるように見えるが、実際には NULL が返ってくるようにしか見えない。
+            // なので成功するまでアドレスを進めつつリトライ…。
+            for(size_t i=0; o_data==NULL; ++i) {
+                o_data = ::VirtualAlloc((void*)((size_t)exe+(0x10000*i)), o_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+            }
             fseek(f, 0, SEEK_SET);
-            fread(&data[0], 1, size, f);
+            fread(o_data, 1, o_size, f);
         }
         fclose(f);
         return true;
     }
     return false;
-}
-
-void MakeExecutable(void *p, size_t size)
-{
-    DWORD old_flag;
-    VirtualProtect(p, size, PAGE_EXECUTE_READWRITE, &old_flag);
 }
 
 void* FindSymbolInExe(const char *name)
@@ -114,7 +140,8 @@ public:
 
 private:
     typedef stl::map<stl::string, void*> SymbolTable;
-    stl::vector<char> m_data;
+    void *m_data;
+    size_t m_datasize;
     stl::string m_filepath;
     SymbolTable m_symbols;
     DynamicObjLoader *m_loader;
@@ -147,6 +174,7 @@ public:
     // exe 側 obj 側問わずシンボルを探す。link 処理用
     void* resolveExternalSymbol(const stl::string &name);
 
+    // シンボル name が .obj リロードなどで更新された場合、target も自動的に更新する
     void addSymbolLink(const stl::string &name, void *&target);
 
     // f: functor [](const stl::string &symbol_name, const void *data)
@@ -154,15 +182,6 @@ public:
     void eachSymbol(const F &f)
     {
         for(SymbolTable::iterator i=m_symbols.begin(); i!=m_symbols.end(); ++i) {
-            f(i->first, i->second);
-        }
-    }
-
-    // f: functor [](const stl::string &symbol_name, ObjTable *data)
-    template<class F>
-    void eachObj(const F &f)
-    {
-        for(ObjTable::iterator i=m_symbols.begin(); i!=m_symbols.end(); ++i) {
             f(i->first, i->second);
         }
     }
@@ -178,14 +197,16 @@ private:
 };
 
 
-
 void ObjFile::unload()
 {
-    m_data.clear();
+    if(m_data!=NULL) {
+        ::VirtualFree(m_data, 0, MEM_RELEASE);
+        m_data = NULL;
+        m_datasize = 0;
+    }
     m_filepath.clear();
     m_symbols.clear();
 }
-
 
 inline const char* GetSymbolName(PSTR StringTable, PIMAGE_SYMBOL Sym)
 {
@@ -195,13 +216,17 @@ inline const char* GetSymbolName(PSTR StringTable, PIMAGE_SYMBOL Sym)
 bool ObjFile::load(const stl::string &path)
 {
     m_filepath = path;
-    if(!MapFile(path, m_data)) {
+    if(!MapFile(path, m_data, m_datasize)) {
         return false;
     }
 
-    size_t ImageBase = (size_t)(&m_data[0]);
+    size_t ImageBase = (size_t)(m_data);
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)ImageBase;
+#ifdef _WIN64
+    if( pDosHeader->e_magic!=IMAGE_FILE_MACHINE_AMD64 || pDosHeader->e_sp!=0 ) {
+#else
     if( pDosHeader->e_magic!=IMAGE_FILE_MACHINE_I386 || pDosHeader->e_sp!=0 ) {
+#endif
         return false;
     }
 
@@ -222,7 +247,6 @@ bool ObjFile::load(const stl::string &path)
             IMAGE_SECTION_HEADER &sect = pSectionHeader[sym->SectionNumber-1];
             void *data = (void*)(ImageBase + sect.PointerToRawData + sym->Value);
             if(sym->SectionNumber!=IMAGE_SYM_UNDEFINED) {
-                MakeExecutable(data, sect.SizeOfRawData);
                 m_symbols[name] = data;
             }
         }
@@ -235,7 +259,7 @@ bool ObjFile::load(const stl::string &path)
 // 外部シンボルのリンケージ解決
 void ObjFile::link()
 {
-    size_t ImageBase = (size_t)(&m_data[0]);
+    size_t ImageBase = (size_t)(m_data);
     PIMAGE_FILE_HEADER pImageHeader = (PIMAGE_FILE_HEADER)ImageBase;
     PIMAGE_OPTIONAL_HEADER *pOptionalHeader = (PIMAGE_OPTIONAL_HEADER*)(pImageHeader+1);
 
@@ -259,18 +283,24 @@ void ObjFile::link()
                 PIMAGE_RELOCATION pReloc = pRelocation + ri;
                 PIMAGE_SYMBOL rsym = pSymbolTable + pReloc->SymbolTableIndex;
                 const char *rname = GetSymbolName(StringTable, rsym);
-                void *rdata = m_loader->resolveExternalSymbol(rname);
+                size_t rdata = (size_t)m_loader->resolveExternalSymbol(rname);
                 if(rdata==NULL) {
                     istPrint("DOL error: %s が参照するシンボル %s を解決できませんでした。\n", m_filepath.c_str(), rname);
                     DebugBreak();
                     continue;
                 }
-                // IMAGE_REL_I386_REL32 の場合相対アドレスに直す必要がある
-                if(pReloc->Type==IMAGE_REL_I386_REL32) {
-                    size_t rel = (size_t)rdata - SectionBase - pReloc->VirtualAddress - 4;
-                    rdata = (void*)rel;
+                // 相対アドレス指定の場合相対アドレスに変換
+#ifdef _WIN64
+                if( pReloc->Type==IMAGE_REL_AMD64_REL32 ) {
+#else
+                if( pReloc->Type==IMAGE_REL_I386_REL32 ) {
+#endif
+                    DWORD rel = (DWORD)(rdata - SectionBase - pReloc->VirtualAddress - 4);
+                    *(DWORD*)(SectionBase + pReloc->VirtualAddress) = rel;
                 }
-                *(void**)(SectionBase + pReloc->VirtualAddress) = rdata;
+                else {
+                    *(size_t*)(SectionBase + pReloc->VirtualAddress) = rdata;
+                }
             }
         }
         i += pSymbolTable[i].NumberOfAuxSymbols;
@@ -309,6 +339,9 @@ void DynamicObjLoader::load( const stl::string &path )
     loader->eachSymbol([&](const stl::string &name, void *data){ m_symbols.insert(stl::make_pair(name, data)); });
 }
 
+inline void CallOnLoadHandler(ObjFile *obj)   { if(Handler h=(Handler)obj->findSymbol("_DOL_OnLoadHandler")) { h(); } }
+inline void CallOnUnloadHandler(ObjFile *obj) { if(Handler h=(Handler)obj->findSymbol("_DOL_OnUnloadHandler")) { h(); } }
+
 void DynamicObjLoader::link()
 {
     for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
@@ -318,9 +351,7 @@ void DynamicObjLoader::link()
         *i->second = findSymbol(i->first);
     }
     for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
-        if(Handler h = (Handler)i->second->findSymbol("_DOL_OnLoadHandler")) {
-            h();
-        }
+        CallOnLoadHandler(i->second);
     }
 }
 
@@ -328,9 +359,7 @@ void DynamicObjLoader::unload( const stl::string &path )
 {
     ObjTable::iterator i = m_objs.find(path);
     if(i!=m_objs.end()) {
-        if(Handler h = (Handler)i->second->findSymbol("_DOL_OnUnloadHandler")) {
-            h();
-        }
+        CallOnUnloadHandler(i->second);
         delete i->second;
         m_objs.erase(i);
     }
@@ -339,9 +368,7 @@ void DynamicObjLoader::unload( const stl::string &path )
 void DynamicObjLoader::unloadAll()
 {
     for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
-        if(Handler h = (Handler)i->second->findSymbol("_DOL_OnUnloadHandler")) {
-            h();
-        }
+        CallOnUnloadHandler(i->second);
         delete i->second;
     }
     m_objs.clear();
@@ -377,7 +404,6 @@ void DynamicObjLoader::addSymbolLink( const stl::string &name, void *&target )
 
 DynamicObjLoader *m_objloader = NULL;
 
-
 class DOL_Initializer
 {
 public:
@@ -392,7 +418,6 @@ public:
         delete m_objloader;
         m_objloader = NULL;
     }
-
 } g_dol_init;
 
 } // namespace dol
