@@ -44,7 +44,7 @@
 
 
 // obj 側で使います。親 process から参照されるシンボルにつけます。mangling 問題を解決するためのもの
-#define DOL_ObjExport   extern "C"
+#define DOL_ObjExport   extern "C" __declspec(dllexport)
 
 // obj 側で使います。引数には処理内容を書きます。このブロックはロード時に自動的に実行されます
 #define DOL_OnLoad(...)     DOL_ObjExport void DOL_OnLoadHandler()   { __VA_ARGS__ }
@@ -83,9 +83,22 @@ void DOL_Unload(const char *path);
 // 全 .obj をアンロードします。
 void DOL_UnloadAll();
 
+// .cpp の変更を検出して自動ビルドするのを開始します。
+void DOL_StartBuilder(const char *cflags, bool create_console_window);
+// 指定ディレクトリの .cpp や .h の変更を検出したら自動コンパイルします。
+void DOL_AddSourceDirectory(const char *path);
 
+// 指定ディレクトリの .obj をロードし、更新された時 DOL_FlushReload() でリロードできるようにします。
+void DOL_AddObjDirectory(const char *path);
+
+// .obj のリロードを行います。
+// .cpp の再コンパイルは別のスレッドで自動的に行われますが、.obj のリロードは勝手にやると問題が起きるので、
+// この API でユーザーが適切なタイミングで行う必要があります。
+void DOL_FlushReload();
+
+
+// internal
 void DOL_LinkSymbol(const char *name, void *&target);
-
 class DOL_FunctionLink
 {
 public:
@@ -111,6 +124,11 @@ public:
 #define DOL_Unload(path)
 #define DOL_UnloadAll()
 #define DOL_Link()
+
+#define DOL_StartBuilder(...)
+#define DOL_AddSourceDirectory(...)
+#define DOL_AddObjDirectory(...)
+#define DOL_FlushReload()
 
 
 #endif // DOL_Static_Link

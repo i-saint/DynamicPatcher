@@ -7,6 +7,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <process.h>
 #pragma comment(lib, "imagehlp.lib")
 #pragma warning(disable: 4996) // _s じゃない CRT 関数使うとでるやつ
 
@@ -16,6 +17,9 @@
 namespace dol {
 
 namespace stl = std;
+
+const char g_symname_onload[] = DOL_Symbol_Prefix "DOL_OnLoadHandler";
+const char g_symname_onunload[] = DOL_Symbol_Prefix "DOL_OnUnloadHandler";
 
 
 #define istPrint(...) DebugPrint(__VA_ARGS__)
@@ -48,7 +52,6 @@ bool InitializeDebugSymbol(HANDLE proc=::GetCurrentProcess())
         return false;
     }
     ::SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
-
     return true;
 }
 
@@ -120,6 +123,7 @@ class ObjFile
 {
 public:
     ObjFile(DynamicObjLoader *loader) : m_loader(loader) {}
+    ~ObjFile() { unload(); }
 
     bool load(const stl::string &path);
     void unload();
@@ -156,13 +160,14 @@ public:
 
     // .obj のロードを行う。
     // 既に読まれているファイルを指定した場合リロード処理を行う。
-    void load(const stl::string &path);
+    bool load(const stl::string &path, ObjFile *obj);
+    bool load(const stl::string &path);
     void unload(const stl::string &path);
     void unloadAll();
 
     // 依存関係の解決処理。ロード後実行前に必ず呼ぶ必要がある。
     // load の中で link までやってもいいが、.obj の数が増えるほど無駄が多くなる上、
-    // 未解決シンボルを判別しづらくなるので手順を分割した。
+    // 本当に未解決なシンボルを判別しづらくなるので手順を分割した。
     void link();
 
     // ロード済み obj 検索
@@ -187,6 +192,7 @@ public:
     }
 
 private:
+    typedef stl::vector<ObjFile*>           ObjVector;
     typedef stl::map<stl::string, ObjFile*> ObjTable;
     typedef stl::map<stl::string, void*>    SymbolTable;
     typedef stl::map<stl::string, void**>   SymbolLinkTable;
@@ -194,7 +200,9 @@ private:
     ObjTable m_objs;
     SymbolTable m_symbols;
     SymbolLinkTable m_links;
+    ObjVector m_handle_onload;
 };
+
 
 
 void ObjFile::unload()
@@ -273,7 +281,7 @@ void ObjFile::link()
     PIMAGE_SYMBOL pSymbolTable = (PIMAGE_SYMBOL)((size_t)pImageHeader + pImageHeader->PointerToSymbolTable);
     DWORD SymbolCount = pImageHeader->NumberOfSymbols;
 
-    PSTR StringTable = (PSTR)&pSymbolTable[SymbolCount];
+    PSTR StringTable = (PSTR)(pSymbolTable+SymbolCount);
 
     for( size_t i=0; i < SymbolCount; ++i ) {
         PIMAGE_SYMBOL sym = pSymbolTable + i;
@@ -336,51 +344,93 @@ DynamicObjLoader::~DynamicObjLoader()
     unloadAll();
 }
 
-void DynamicObjLoader::load( const stl::string &path )
+bool DynamicObjLoader::load( const stl::string &path, ObjFile *obj )
 {
-    ObjFile *&loader = m_objs[path];
-    if(loader==NULL) {
-        loader = new ObjFile(this);
+    // obj 内のシンボルがどこからも参照されておらず、
+    // OnLoad などのハンドラも持たないならばメモリの無駄なので破棄する。
+    {
+        if(obj->findSymbol(g_symname_onload)!=NULL)     { goto RELATION_CHECK_PASSED; }
+        if(obj->findSymbol(g_symname_onunload)!=NULL)   { goto RELATION_CHECK_PASSED; }
+        for(SymbolLinkTable::iterator i=m_links.begin(); i!=m_links.end(); ++i) {
+            if(obj->findSymbol(i->first.c_str())!=NULL) { goto RELATION_CHECK_PASSED; }
+        }
+        {
+            unload(path);
+            m_objs.erase(path);
+            delete obj;
+            return false;
+        }
+RELATION_CHECK_PASSED:;
     }
-    loader->eachSymbol([&](const stl::string &name, void *data){ m_symbols.erase(name); });
-    loader->unload();
-    loader->load(path);
-    loader->eachSymbol([&](const stl::string &name, void *data){ m_symbols.insert(stl::make_pair(name, data)); });
+
+    // 同名 obj が既にロード済みであれば、適切に unload 処理して新しいものに差し替える
+    {
+        ObjTable::iterator i = m_objs.find(path);
+        if(i!=m_objs.end()) {
+            i->second->eachSymbol([&](const stl::string &name, void *data){ m_symbols.erase(name); });
+            delete i->second;
+            i->second = obj;
+        }
+        else {
+            m_objs[path] = obj;
+        }
+    }
+
+    // OnLoad を呼ぶリストに追加。リンク処理の後に呼ぶ
+    m_handle_onload.push_back(obj);
+
+    return true;
 }
 
-inline void CallOnLoadHandler(ObjFile *obj)   { if(Handler h=(Handler)obj->findSymbol(DOL_Symbol_Prefix "DOL_OnLoadHandler")) { h(); } }
-inline void CallOnUnloadHandler(ObjFile *obj) { if(Handler h=(Handler)obj->findSymbol(DOL_Symbol_Prefix "DOL_OnUnloadHandler")) { h(); } }
+bool DynamicObjLoader::load( const stl::string &path )
+{
+    ObjFile *obj = new ObjFile(this);
+    if(!obj->load(path)) {
+        delete obj;
+        return false;
+    }
+    return load(path, obj);
+}
+
+inline void CallOnLoadHandler(ObjFile *obj)   { if(Handler h=(Handler)obj->findSymbol(g_symname_onload))   { h(); } }
+inline void CallOnUnloadHandler(ObjFile *obj) { if(Handler h=(Handler)obj->findSymbol(g_symname_onunload)) { h(); } }
 
 void DynamicObjLoader::link()
 {
+    for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
+        i->second->eachSymbol([&](const stl::string &name, void *data){ m_symbols.insert(stl::make_pair(name, data)); });
+    }
     for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
         i->second->link();
     }
     for(SymbolLinkTable::iterator i=m_links.begin(); i!=m_links.end(); ++i) {
         *i->second = findSymbol(i->first);
     }
-    for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
-        CallOnLoadHandler(i->second);
+
+    for(size_t i=0; i<m_handle_onload.size(); ++i) {
+        CallOnLoadHandler(m_handle_onload[i]);
     }
+    m_handle_onload.clear();
 }
 
 void DynamicObjLoader::unload( const stl::string &path )
 {
     ObjTable::iterator i = m_objs.find(path);
     if(i!=m_objs.end()) {
-        CallOnUnloadHandler(i->second);
-        delete i->second;
+        ObjFile *obj = i->second;
+        CallOnUnloadHandler(obj);
+        obj->eachSymbol([&](const stl::string &name, void *data){ m_symbols.erase(name); });
+        delete obj;
         m_objs.erase(i);
     }
 }
 
 void DynamicObjLoader::unloadAll()
 {
-    for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
-        CallOnUnloadHandler(i->second);
-        delete i->second;
+    while(!m_objs.empty()) {
+        ObjTable::iterator i=m_objs.begin();
+        unload(i->first);
     }
-    m_objs.clear();
 }
 
 ObjFile* DynamicObjLoader::findObj( const stl::string &path )
@@ -411,7 +461,120 @@ void DynamicObjLoader::addSymbolLink( const stl::string &name, void *&target )
 
 
 
-DynamicObjLoader *m_objloader = NULL;
+
+class Builder
+{
+public:
+    Builder(const char *build_options, bool create_console)
+        : m_msbuild_option(build_options)
+        , m_create_console(create_console)
+        , m_flag_exit(false)
+        , m_thread_watchfile(NULL)
+    {
+        stl::string VCVersion;
+        {
+            //switch around prefered compiler to the one we've used to compile this file
+            const unsigned int MSCVERSION = _MSC_VER;
+            switch( MSCVERSION )
+            {
+            case 1500: VCVersion="9.0";  break; //VS 2008
+            case 1600: VCVersion="10.0"; break; //VS 2010
+            case 1700: VCVersion="11.0"; break; //VS 2011
+            default: ::DebugBreak(); //shouldn't happen.
+            }
+        }
+
+
+        //HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VisualStudio\<version>\Setup\VS\<edition>
+        stl::string keyName = "SOFTWARE\\Microsoft\\VisualStudio\\SxS\\VC7";
+        char value[MAX_PATH];
+        DWORD size = MAX_PATH;
+        HKEY key;
+        LONG retKey = ::RegOpenKeyExA(HKEY_LOCAL_MACHINE, keyName.c_str(), 0, KEY_READ|KEY_WOW64_32KEY, &key);
+        LONG retVal = ::RegQueryValueExA(key, VCVersion.c_str(), NULL, NULL, (LPBYTE)value, &size );
+        if( retVal==ERROR_SUCCESS  ) {
+            m_msbuild += '"';
+            m_msbuild += value;
+            m_msbuild += "vcvarsall.bat";
+            m_msbuild += '"';
+#ifdef _WIN64
+            m_msbuild += " amd64";
+#else // _WIN64
+            m_msbuild += " x86";
+#endif // _WIN64
+            m_msbuild += " && ";
+            m_msbuild += "msbuild";
+        }
+        ::RegCloseKey( key );
+
+        if(create_console) {
+            ::AllocConsole();
+        }
+
+        //m_thread_watchfile = (HANDLE)_beginthread( threadWatchFile, 0, this ); //this will exit when process for compile is closed
+    }
+
+    ~Builder()
+    {
+        m_flag_exit = true;
+        if(m_thread_watchfile!=NULL) {
+            ::WaitForSingleObject(m_thread_watchfile, INFINITE);
+        }
+        if(m_create_console) {
+            ::FreeConsole();
+        }
+    }
+
+    static void threadWatchFile( LPVOID arg )
+    {
+        ((Builder*)arg)->execWatchFile();
+    }
+
+    void execWatchFile()
+    {
+        while(!m_flag_exit) {
+            execBuild();
+            ::Sleep(1000);
+        }
+    }
+
+    void execBuild()
+    {
+        stl::string command = m_msbuild;
+        command+=' ';
+        command+=m_msbuild_option;
+
+        STARTUPINFOA si; 
+        PROCESS_INFORMATION pi; 
+        memset(&si, 0, sizeof(si)); 
+        memset(&pi, 0, sizeof(pi)); 
+        si.cb = sizeof(si);
+        if(::CreateProcessA(NULL, (LPSTR)command.c_str(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)==TRUE) {
+            ::WaitForSingleObject(pi.hProcess, INFINITE);
+        }
+    }
+
+    void addSourceDirectory(const char *path)
+    {
+        m_source_dirs.push_back(path);
+    }
+
+private:
+    stl::string m_msbuild;
+    stl::string m_msbuild_option;
+    stl::vector<stl::string> m_source_dirs;
+    bool m_create_console;
+    bool m_flag_exit;
+    HANDLE m_thread_watchfile;
+};
+
+class AutoLoader
+{
+
+};
+
+DynamicObjLoader *g_objloader = NULL;
+Builder *g_builder = NULL;
 
 class DOL_Initializer
 {
@@ -419,13 +582,13 @@ public:
     DOL_Initializer()
     {
         InitializeDebugSymbol();
-        m_objloader = new DynamicObjLoader();
+        g_objloader = new DynamicObjLoader();
     }
 
     ~DOL_Initializer()
     {
-        delete m_objloader;
-        m_objloader = NULL;
+        delete g_builder;  g_builder=NULL;
+        delete g_objloader; g_objloader=NULL;
     }
 } g_dol_init;
 
@@ -435,27 +598,65 @@ using namespace dol;
 
 void  DOL_Load(const char *path)
 {
-    m_objloader->load(path);
+    g_objloader->load(path);
 }
 
 void DOL_Unload(const char *path)
 {
-    m_objloader->unload(path);
+    g_objloader->unload(path);
 }
 
 void DOL_UnloadAll()
 {
-    m_objloader->unloadAll();
+    g_objloader->unloadAll();
 }
 
 void  DOL_Link()
 {
-    m_objloader->link();
+    g_objloader->link();
 }
 
 void DOL_LinkSymbol(const char *name, void *&target)
 {
-    m_objloader->addSymbolLink(name, target);
+    g_objloader->addSymbolLink(name, target);
 }
+
+
+void DOL_StartBuilder(const char *cflags, bool create_console_window)
+{
+    if(g_builder==NULL) {
+        g_builder  = new Builder(cflags, create_console_window);
+    }
+}
+
+void DOL_AddSourceDirectory(const char *path)
+{
+    g_builder->addSourceDirectory(path);
+};
+
+void DOL_AddObjDirectory(const char *path)
+{
+    stl::string tmppath;
+    stl::string key = path;
+    key += "\\*.obj";
+
+    WIN32_FIND_DATAA wfdata;
+    HANDLE handle = ::FindFirstFileA(key.c_str(), &wfdata);
+    if(handle!=INVALID_HANDLE_VALUE) {
+        do {
+            tmppath = path;
+            tmppath += "\\";
+            tmppath += wfdata.cFileName;
+            g_objloader->load(tmppath.c_str());
+        } while(::FindNextFileA(handle, &wfdata));
+        ::FindClose(handle);
+    }
+}
+
+void DOL_FlushReload()
+{
+
+}
+
 
 #endif // DOL_Static_Link

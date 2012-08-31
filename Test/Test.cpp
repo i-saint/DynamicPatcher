@@ -57,14 +57,15 @@ DOL_ObjFunc(IHoge*, CreateObjHoge);
 int main(int argc, _TCHAR* argv[])
 {
 #ifdef _WIN64
-    DOL_Load("TestObj64.obj");
+    DOL_StartBuilder("/m /p:Configuration=Release;Platform=x64", true);
+    DOL_AddObjDirectory("x64\\Release");
 #else // _WIN64
-    DOL_Load("TestObj.obj");
+    DOL_StartBuilder("/m /p:Configuration=Release;Platform=Win32", true);
+    DOL_AddObjDirectory("Release");
 #endif // _WIN64
     DOL_Link();
 
     istPrint("%.2f\n", FloatAdd(1.0f, 2.0f));
-
     CallExternalFunc();
     CallExeFunc();
 
