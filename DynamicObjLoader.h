@@ -43,13 +43,16 @@
 #endif // _WIN64
 
 
-// obj 側で使います。親 process から参照されるシンボルにつけます。mangling 問題を解決するためのもの
-#define DOL_ObjExport   extern "C" __declspec(dllexport)
+// obj 側で使います。親 process から参照されるシンボルにつけます。mangling 問題を解決するためのもの。
+#define DOL_ObjExport   extern "C"
 
-// obj 側で使います。引数には処理内容を書きます。このブロックはロード時に自動的に実行されます
+// obj 側で使います。引数には処理内容を書きます。このブロックはロード時に自動的に実行されます。
+// また、もうひとつ特殊な役割を持ちます。
+// .exe から参照されているシンボルがなく、OnLoad/OnUnload もない .obj は安全のためロードされないようになっています。
+// このため、.exe からは参照されないが他の .obj からは参照される .obj はこれをつけて省かれないようにする必要があります。(内容は空でも ok)
 #define DOL_OnLoad(...)     DOL_ObjExport void DOL_OnLoadHandler()   { __VA_ARGS__ }
 
-// obj 側で使います。引数には処理内容を書きます。このブロックはアンロード時に自動的に実行されます
+// obj 側で使います。引数には処理内容を書きます。このブロックはアンロード時に自動的に実行されます。
 #define DOL_OnUnload(...)   DOL_ObjExport void DOL_OnUnloadHandler() { __VA_ARGS__ }
 
 // obj, exe 両方で使います。
@@ -72,29 +75,31 @@
 // 以下 exe 側で使う API
 
 // .obj をロードします。ロードが終わった後は DOL_Link() でリンクする必要があります。
-void DOL_Load(const char *path);
+void DOL_LoadObj(const char *path);
+
+// 指定ディレクトリ以下の全 .obj をロードします。こちらも後に DOL_Link() が必要です。
+void DOL_LoadObjDirectory(const char *path);
 
 // リンクを行います。 必要なものを全てロードした後に 1 度これを呼ぶ必要があります。
 // .obj に DOL_OnLoad() のブロックがある場合、このタイミングで呼ばれます。
 void DOL_Link();
+
+// 全 .obj をリロードし、再リンクします。
+// .cpp の再コンパイルは別のスレッドで自動的に行われますが、.obj のリロードは勝手にやると問題が起きるので、
+// これを呼んでユーザー側で適切なタイミングで行う必要があります。
+// 再コンパイルが行われていなかった場合なにもしないので、毎フレーム呼んでも大丈夫です。
+void DOL_ReloadAndLink();
+
 // .obj をアンロードします。
 // 対象 .obj に DOL_OnUnload() のブロックがある場合、このタイミングで呼ばれます。
 void DOL_Unload(const char *path);
 // 全 .obj をアンロードします。
 void DOL_UnloadAll();
 
-// .cpp の変更を検出して自動ビルドするのを開始します。
-void DOL_StartBuilder(const char *cflags, bool create_console_window);
-// 指定ディレクトリの .cpp や .h の変更を検出したら自動コンパイルします。
+// 自動ビルド (.cpp の変更を検出したら自動的にビルド開始) を開始します。
+void DOL_StartAutoRecompile(const char *build_options, bool create_console_window);
+// 自動ビルド用の監視ディレクトリ。このディレクトリ以下の .cpp や .h の変更を検出したらビルドが始まります。
 void DOL_AddSourceDirectory(const char *path);
-
-// 指定ディレクトリの .obj をロードし、更新された時 DOL_FlushReload() でリロードできるようにします。
-void DOL_AddObjDirectory(const char *path);
-
-// .obj のリロードを行います。
-// .cpp の再コンパイルは別のスレッドで自動的に行われますが、.obj のリロードは勝手にやると問題が起きるので、
-// この API でユーザーが適切なタイミングで行う必要があります。
-void DOL_FlushReload();
 
 
 // internal
@@ -120,15 +125,15 @@ public:
 #define DOL_DeclareObjFunc(ret, name, ...)    ret name(__VA_ARGS__)
 #define DOL_ObjFunc(ret, name, ...)           ret name(__VA_ARGS__)
 
-#define DOL_Load(path)
+#define DOL_LoadObj(path)
+#define DOL_ReloadAndLink()
 #define DOL_Unload(path)
 #define DOL_UnloadAll()
 #define DOL_Link()
 
-#define DOL_StartBuilder(...)
+#define DOL_StartAutoRecompile(...)
 #define DOL_AddSourceDirectory(...)
-#define DOL_AddObjDirectory(...)
-#define DOL_FlushReload()
+#define DOL_LoadObjDirectory(...)
 
 
 #endif // DOL_Static_Link

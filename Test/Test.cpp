@@ -56,27 +56,32 @@ DOL_ObjFunc(IHoge*, CreateObjHoge);
 
 int main(int argc, _TCHAR* argv[])
 {
+    DOL_AddSourceDirectory(".\\");
 #ifdef _WIN64
-    DOL_StartBuilder("/m /p:Configuration=Release;Platform=x64", true);
-    DOL_AddObjDirectory("x64\\Release");
+    DOL_StartAutoRecompile("/m /p:Configuration=Release;Platform=x64", true);
+    DOL_LoadObjDirectory("x64\\Release");
 #else // _WIN64
-    DOL_StartBuilder("/m /p:Configuration=Release;Platform=Win32", true);
-    DOL_AddObjDirectory("Release");
+    DOL_StartAutoRecompile("/m /p:Configuration=Release;Platform=Win32", true);
+    DOL_LoadObjDirectory("Release");
 #endif // _WIN64
     DOL_Link();
 
-    istPrint("%.2f\n", FloatAdd(1.0f, 2.0f));
-    CallExternalFunc();
-    CallExeFunc();
+    for(;;) {
+        istPrint("%.2f\n", FloatAdd(1.0f, 2.0f));
+        CallExternalFunc();
+        CallExeFunc();
+        {
+            Hoge hoge;
+            IHogeReceiver(&hoge);
+        }
+        {
+            IHoge *hoge = CreateObjHoge();
+            hoge->DoSomething();
+            delete hoge;
+        }
 
-    {
-        Hoge hoge;
-        IHogeReceiver(&hoge);
-    }
-    {
-        IHoge *hoge = CreateObjHoge();
-        hoge->DoSomething();
-        delete hoge;
+        ::Sleep(5000);
+        DOL_ReloadAndLink();
     }
 
     DOL_UnloadAll();

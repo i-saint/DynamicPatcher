@@ -103,6 +103,19 @@ bool MapFile(const stl::string &path, void *&o_data, size_t &o_size)
     return false;
 }
 
+FILETIME GetFileModifiedTime(const stl::string &path)
+{
+    FILETIME writetime = {0,0};
+    HANDLE h = ::CreateFileA(path.c_str(), 0, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    ::GetFileTime(h, NULL, NULL, &writetime);
+    ::CloseHandle(h);
+    return writetime;
+}
+inline bool operator==(const FILETIME &l, const FILETIME &r)
+{
+    return l.dwHighDateTime==r.dwHighDateTime && l.dwLowDateTime==r.dwLowDateTime;
+}
+
 void* FindSymbolInExe(const char *name)
 {
     char buf[sizeof(SYMBOL_INFO)+MAX_PATH];
@@ -142,10 +155,13 @@ public:
         }
     }
 
+    FILETIME getFileTime() const { return m_filetime; }
+
 private:
     typedef stl::map<stl::string, void*> SymbolTable;
     void *m_data;
     size_t m_datasize;
+    FILETIME m_filetime;
     stl::string m_filepath;
     SymbolTable m_symbols;
     DynamicObjLoader *m_loader;
@@ -160,10 +176,10 @@ public:
 
     // .obj のロードを行う。
     // 既に読まれているファイルを指定した場合リロード処理を行う。
-    bool load(const stl::string &path, ObjFile *obj);
     bool load(const stl::string &path);
     void unload(const stl::string &path);
     void unloadAll();
+    void reloadAndLink();
 
     // 依存関係の解決処理。ロード後実行前に必ず呼ぶ必要がある。
     // load の中で link までやってもいいが、.obj の数が増えるほど無駄が多くなる上、
@@ -227,6 +243,7 @@ bool ObjFile::load(const stl::string &path)
     if(!MapFile(path, m_data, m_datasize)) {
         return false;
     }
+    m_filetime = GetFileModifiedTime(path);
 
     size_t ImageBase = (size_t)(m_data);
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)ImageBase;
@@ -344,10 +361,27 @@ DynamicObjLoader::~DynamicObjLoader()
     unloadAll();
 }
 
-bool DynamicObjLoader::load( const stl::string &path, ObjFile *obj )
+bool DynamicObjLoader::load( const stl::string &path )
 {
-    // obj 内のシンボルがどこからも参照されておらず、
-    // OnLoad などのハンドラも持たないならばメモリの無駄なので破棄する。
+    // 同名ファイルが読み込み済み && 前回からファイルの更新時刻変わってない ならばなにもしない
+    {
+        ObjTable::iterator i = m_objs.find(path);
+        if(i!=m_objs.end()) {
+            FILETIME t = GetFileModifiedTime(path);
+            if(i->second->getFileTime()==t) {
+                return false;
+            }
+        }
+    }
+
+    ObjFile *obj = new ObjFile(this);
+    if(!obj->load(path)) {
+        delete obj;
+        return false;
+    }
+
+    // obj 内のシンボルがどこからも参照されておらず、OnLoad などのハンドラも持たないならば破棄する。
+    // 該当する obj は exe を構成するものと予想され、それをロードして他の .obj から参照すると問題を起こす可能性がある。
     {
         if(obj->findSymbol(g_symname_onload)!=NULL)     { goto RELATION_CHECK_PASSED; }
         if(obj->findSymbol(g_symname_onunload)!=NULL)   { goto RELATION_CHECK_PASSED; }
@@ -382,31 +416,28 @@ RELATION_CHECK_PASSED:;
     return true;
 }
 
-bool DynamicObjLoader::load( const stl::string &path )
-{
-    ObjFile *obj = new ObjFile(this);
-    if(!obj->load(path)) {
-        delete obj;
-        return false;
-    }
-    return load(path, obj);
-}
-
 inline void CallOnLoadHandler(ObjFile *obj)   { if(Handler h=(Handler)obj->findSymbol(g_symname_onload))   { h(); } }
 inline void CallOnUnloadHandler(ObjFile *obj) { if(Handler h=(Handler)obj->findSymbol(g_symname_onunload)) { h(); } }
 
 void DynamicObjLoader::link()
 {
+    // OnLoad が必要なやつがいない場合、新たにロードされたものはないはずなので何もしない
+    if(m_handle_onload.empty()) { return; }
+
+    // 全シンボルを 1 つの map に収集
     for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
         i->second->eachSymbol([&](const stl::string &name, void *data){ m_symbols.insert(stl::make_pair(name, data)); });
     }
+    // ↑で集めた map を使うことで、obj 間シンボルもリンク
     for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
         i->second->link();
     }
+    // exe 側から参照されているシンボルを適切に張り替える
     for(SymbolLinkTable::iterator i=m_links.begin(); i!=m_links.end(); ++i) {
         *i->second = findSymbol(i->first);
     }
 
+    // 新規ロードされているオブジェクトに OnLoad があれば呼ぶ
     for(size_t i=0; i<m_handle_onload.size(); ++i) {
         CallOnLoadHandler(m_handle_onload[i]);
     }
@@ -431,6 +462,14 @@ void DynamicObjLoader::unloadAll()
         ObjTable::iterator i=m_objs.begin();
         unload(i->first);
     }
+}
+
+void DynamicObjLoader::reloadAndLink()
+{
+    for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
+        load(i->first);
+    }
+    link();
 }
 
 ObjFile* DynamicObjLoader::findObj( const stl::string &path )
@@ -465,9 +504,17 @@ void DynamicObjLoader::addSymbolLink( const stl::string &name, void *&target )
 class Builder
 {
 public:
-    Builder(const char *build_options, bool create_console)
-        : m_msbuild_option(build_options)
-        , m_create_console(create_console)
+    struct SourceDir
+    {
+        stl::string path;
+        HANDLE notifier;
+    };
+
+public:
+    Builder()
+        : m_msbuild_option()
+        , m_create_console(false)
+        , m_build_has_just_completed(false)
         , m_flag_exit(false)
         , m_thread_watchfile(NULL)
     {
@@ -483,7 +530,6 @@ public:
             default: ::DebugBreak(); //shouldn't happen.
             }
         }
-
 
         //HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VisualStudio\<version>\Setup\VS\<edition>
         stl::string keyName = "SOFTWARE\\Microsoft\\VisualStudio\\SxS\\VC7";
@@ -506,12 +552,6 @@ public:
             m_msbuild += "msbuild";
         }
         ::RegCloseKey( key );
-
-        if(create_console) {
-            ::AllocConsole();
-        }
-
-        //m_thread_watchfile = (HANDLE)_beginthread( threadWatchFile, 0, this ); //this will exit when process for compile is closed
     }
 
     ~Builder()
@@ -525,6 +565,16 @@ public:
         }
     }
 
+    void start(const char *build_options, bool create_console)
+    {
+        m_msbuild_option = build_options;
+        m_create_console = create_console;
+        if(create_console) {
+            ::AllocConsole();
+        }
+        m_thread_watchfile = (HANDLE)_beginthread( threadWatchFile, 0, this );
+    }
+
     static void threadWatchFile( LPVOID arg )
     {
         ((Builder*)arg)->execWatchFile();
@@ -532,9 +582,34 @@ public:
 
     void execWatchFile()
     {
+        // ファイルの変更を監視、変更が検出されたらビルド開始
+        for(size_t i=0; i<m_srcdirs.size(); ++i) {
+            m_srcdirs[i].notifier = ::FindFirstChangeNotificationA(m_srcdirs[i].path.c_str(), TRUE, FILE_NOTIFY_CHANGE_LAST_WRITE);
+        }
+
         while(!m_flag_exit) {
-            execBuild();
-            ::Sleep(1000);
+            bool needs_build = false;
+            for(size_t i=0; i<m_srcdirs.size(); ++i) {
+                if(::WaitForSingleObject(m_srcdirs[i].notifier, 10)==WAIT_OBJECT_0) {
+                    needs_build = true;
+                }
+            }
+            if(needs_build) {
+                execBuild();
+                for(size_t i=0; i<m_srcdirs.size(); ++i) {
+                    // ビルドで大量のファイルに変更が加わっていることがあり、以後の FindFirstChangeNotificationA() はそれを検出してしまう。
+                    // そうなると永遠にビルドし続けてしまうため、HANDLE ごと作りなおして一度リセットする。
+                    FindCloseChangeNotification(m_srcdirs[i].notifier);
+                    m_srcdirs[i].notifier = ::FindFirstChangeNotificationA(m_srcdirs[i].path.c_str(), TRUE, FILE_NOTIFY_CHANGE_LAST_WRITE);
+                }
+            }
+            else {
+                ::Sleep(1000);
+            }
+        }
+
+        for(size_t i=0; i<m_srcdirs.size(); ++i) {
+            FindCloseChangeNotification(m_srcdirs[i].notifier);
         }
     }
 
@@ -551,19 +626,31 @@ public:
         si.cb = sizeof(si);
         if(::CreateProcessA(NULL, (LPSTR)command.c_str(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)==TRUE) {
             ::WaitForSingleObject(pi.hProcess, INFINITE);
+            m_build_has_just_completed = true;
         }
     }
 
     void addSourceDirectory(const char *path)
     {
-        m_source_dirs.push_back(path);
+        SourceDir sd = {path, NULL};
+        m_srcdirs.push_back(sd);
+    }
+
+    bool needsReloadAndLink() const
+    {
+        if(m_build_has_just_completed) {
+            m_build_has_just_completed = false;
+            return true;
+        }
+        return false;
     }
 
 private:
     stl::string m_msbuild;
     stl::string m_msbuild_option;
-    stl::vector<stl::string> m_source_dirs;
+    stl::vector<SourceDir> m_srcdirs;
     bool m_create_console;
+    mutable bool m_build_has_just_completed;
     bool m_flag_exit;
     HANDLE m_thread_watchfile;
 };
@@ -583,6 +670,7 @@ public:
     {
         InitializeDebugSymbol();
         g_objloader = new DynamicObjLoader();
+        g_builder = new Builder();
     }
 
     ~DOL_Initializer()
@@ -596,7 +684,7 @@ public:
 
 using namespace dol;
 
-void  DOL_Load(const char *path)
+void  DOL_LoadObj(const char *path)
 {
     g_objloader->load(path);
 }
@@ -616,17 +704,22 @@ void  DOL_Link()
     g_objloader->link();
 }
 
+void DOL_ReloadAndLink()
+{
+    if(g_builder->needsReloadAndLink()) {
+        g_objloader->reloadAndLink();
+    }
+}
+
 void DOL_LinkSymbol(const char *name, void *&target)
 {
     g_objloader->addSymbolLink(name, target);
 }
 
 
-void DOL_StartBuilder(const char *cflags, bool create_console_window)
+void DOL_StartAutoRecompile(const char *build_options, bool create_console_window)
 {
-    if(g_builder==NULL) {
-        g_builder  = new Builder(cflags, create_console_window);
-    }
+    g_builder->start(build_options, create_console_window);
 }
 
 void DOL_AddSourceDirectory(const char *path)
@@ -634,7 +727,7 @@ void DOL_AddSourceDirectory(const char *path)
     g_builder->addSourceDirectory(path);
 };
 
-void DOL_AddObjDirectory(const char *path)
+void DOL_LoadObjDirectory(const char *path)
 {
     stl::string tmppath;
     stl::string key = path;
@@ -651,11 +744,6 @@ void DOL_AddObjDirectory(const char *path)
         } while(::FindNextFileA(handle, &wfdata));
         ::FindClose(handle);
     }
-}
-
-void DOL_FlushReload()
-{
-
 }
 
 
