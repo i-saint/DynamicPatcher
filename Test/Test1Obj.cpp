@@ -1,22 +1,23 @@
-﻿#include <cstdio>
+﻿#include "stdafx.h"
+#include <cstdio>
 #include <windows.h>
 #include "DynamicObjLoader.h"
-#include "Test.h"
+#include "Test1.h"
 
 
 
-DOL_ObjExport float FloatAdd(float a, float b)
+DOL_Export float FloatAdd(float a, float b)
 {
     return a+b;
 }
 
-DOL_ObjExport void CallExternalFunc()
+DOL_Export void CallExternalFunc()
 {
     OutputDebugStringA("CallExternalFunc()\n");
 }
 
 void FuncInExe();
-DOL_ObjExport void CallExeFunc()
+DOL_Export void CallExeFunc()
 {
     return FuncInExe();
 }
@@ -41,12 +42,12 @@ public:
     }
 };
 
-DOL_ObjExport void IHogeReceiver(IHoge *hoge)
+DOL_Export void IHogeReceiver(IHoge *hoge)
 {
     hoge->DoSomething();
 }
 
-DOL_ObjExport IHoge* CreateObjHoge()
+DOL_Export IHoge* CreateObjHoge()
 {
     return new ObjHoge();
 }

@@ -1,7 +1,7 @@
 ﻿#include "stdafx.h"
 #include <windows.h>
 #include "DynamicObjLoader.h"
-#include "Test.h"
+#include "Test1.h"
 #pragma warning(disable: 4996) // _s じゃない CRT 関数使うとでるやつ
 
 
@@ -48,11 +48,11 @@ public:
 };
 
 
-DOL_ObjFunc(float, FloatAdd, float, float);
-DOL_ObjFunc(void, CallExternalFunc);
-DOL_ObjFunc(void, CallExeFunc);
-DOL_ObjFunc(void, IHogeReceiver, IHoge*);
-DOL_ObjFunc(IHoge*, CreateObjHoge);
+DOL_ImportFunction(float, FloatAdd, (float, float));
+DOL_ImportFunction(void, CallExternalFunc, ());
+DOL_ImportFunction(void, CallExeFunc, ());
+DOL_ImportFunction(void, IHogeReceiver, (IHoge*));
+DOL_ImportFunction(IHoge*, CreateObjHoge, ());
 
 int main(int argc, _TCHAR* argv[])
 {

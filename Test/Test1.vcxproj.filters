@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="stdafx.h">
+      <Filter>Test1</Filter>
+    </ClInclude>
+    <ClInclude Include="targetver.h">
+      <Filter>Test1</Filter>
+    </ClInclude>
+    <ClInclude Include="Test1.h">
+      <Filter>Test1</Filter>
+    </ClInclude>
+    <ClInclude Include="..\DynamicObjLoader.h">
+      <Filter>DynamicObjLoader</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="stdafx.cpp">
+      <Filter>Test1</Filter>
+    </ClCompile>
+    <ClCompile Include="Test1.cpp">
+      <Filter>Test1</Filter>
+    </ClCompile>
+    <ClCompile Include="..\DynamicObjLoader.cpp">
+      <Filter>DynamicObjLoader</Filter>
+    </ClCompile>
+    <ClCompile Include="Test1Obj.cpp">
+      <Filter>Test1</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Test1">
+      <UniqueIdentifier>{cec1ea66-648c-473f-a8c5-0b4e4a7f6a64}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="DynamicObjLoader">
+      <UniqueIdentifier>{88b61b2c-e193-4f16-86dd-6cdb5d55644f}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

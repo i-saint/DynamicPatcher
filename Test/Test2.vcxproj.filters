@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns:atg="http://atg.xbox.com" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="DynamicObjLoader">
+      <UniqueIdentifier>{065ca4d8-e5f3-4356-8075-31598e5a2e0a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Test2">
+      <UniqueIdentifier>{fdfff9df-2da0-42e9-9eac-d2276a1eedac}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Test2\Shaders">
+      <UniqueIdentifier>{2c3d4c8c-5d1a-459a-a05a-a4e4b608a44e}</UniqueIdentifier>
+      <Extensions>fx;fxh;hlsl</Extensions>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\DynamicObjLoader.cpp">
+      <Filter>DynamicObjLoader</Filter>
+    </ClCompile>
+    <ClCompile Include="Test2.cpp">
+      <Filter>Test2</Filter>
+    </ClCompile>
+    <ClCompile Include="Test2Obj.cpp">
+      <Filter>Test2</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Test2.fx">
+      <Filter>Test2\Shaders</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\DynamicObjLoader.h">
+      <Filter>DynamicObjLoader</Filter>
+    </ClInclude>
+    <ClInclude Include="Test2.h">
+      <Filter>Test2</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
