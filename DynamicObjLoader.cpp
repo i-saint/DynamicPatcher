@@ -159,10 +159,7 @@ public:
 
     bool load(const stl::string &path);
     void unload();
-
-    // 外部シンボルのリンケージ解決
     bool link();
-
     void* findSymbol(const char *name);
 
     // f: functor [](const stl::string &symbol_name, const void *data)
@@ -193,21 +190,12 @@ public:
     DynamicObjLoader();
     ~DynamicObjLoader();
 
-    // .obj のロードを行う。
-    // 既に読まれているファイルを指定した場合リロード処理を行う。
     bool load(const stl::string &path);
     void unload(ObjFile *obj);
     void unload(const stl::string &path);
     void unloadAll();
-    void reloadAndLink();
-
-    // 依存関係の解決処理。ロード後実行前に必ず呼ぶ必要がある。
-    // load の中で link までやってもいいが、.obj の数が増えるほど無駄が多くなる上、
-    // 本当に未解決なシンボルを判別しづらくなるので手順を分割した。
     bool link();
-
-    // ロード済み obj 検索
-    ObjFile* findObj(const stl::string &path);
+    void update();
 
     // 全ロード済み obj からシンボルを検索
     void* findSymbol(const stl::string &name);
@@ -292,9 +280,39 @@ bool ObjFile::load(const stl::string &path)
         if(sym->SectionNumber>0) {
             IMAGE_SECTION_HEADER &sect = pSectionHeader[sym->SectionNumber-1];
             void *data = (void*)(ImageBase + sect.PointerToRawData + sym->Value);
-            if(sym->SectionNumber!=IMAGE_SYM_UNDEFINED) {
-                m_symbols[name] = data;
+            if(sym->SectionNumber==IMAGE_SYM_UNDEFINED) { continue; }
+            const char *name = GetSymbolName(StringTable, sym);
+            DWORD align = sect.Characteristics & 0x00f00000;
+            if(     align==IMAGE_SCN_ALIGN_1BYTES!=0) {
+                // do nothing
             }
+            else if(align==IMAGE_SCN_ALIGN_2BYTES!=0) {
+            }
+            else if(align==IMAGE_SCN_ALIGN_4BYTES!=0) {
+            }
+            else if(align==IMAGE_SCN_ALIGN_8BYTES!=0) {
+            }
+            else if(align==IMAGE_SCN_ALIGN_16BYTES!=0) {
+            }
+            else if(align==IMAGE_SCN_ALIGN_32BYTES!=0) {
+            }
+            else if(align==IMAGE_SCN_ALIGN_64BYTES!=0) {
+            }
+            else if(align==IMAGE_SCN_ALIGN_128BYTES!=0) {
+            }
+            else if(align==IMAGE_SCN_ALIGN_256BYTES!=0) {
+            }
+            else if(align==IMAGE_SCN_ALIGN_512BYTES!=0) {
+            }
+            else if(align==IMAGE_SCN_ALIGN_1024BYTES!=0) {
+            }
+            else if(align==IMAGE_SCN_ALIGN_2048BYTES!=0) {
+            }
+            else if(align==IMAGE_SCN_ALIGN_4096BYTES!=0) {
+            }
+            else if(align==IMAGE_SCN_ALIGN_8192BYTES!=0) {
+            }
+            m_symbols[name] = data;
         }
         i += pSymbolTable[i].NumberOfAuxSymbols;
     }
@@ -392,23 +410,13 @@ bool DynamicObjLoader::load( const stl::string &path )
         return false;
     }
 
-    // obj 内のシンボルがどこからも参照されておらず、OnLoad などのハンドラも持たないならば破棄する。
-    // 該当する obj は exe を構成するものと予想され、それをロードして他の .obj から参照すると問題を起こす可能性がある。
-    {
-        if(obj->findSymbol(g_symname_modulemarker)!=NULL)   { goto RELATION_CHECK_PASSED; }
-        if(obj->findSymbol(g_symname_onload)!=NULL)         { goto RELATION_CHECK_PASSED; }
-        if(obj->findSymbol(g_symname_onunload)!=NULL)       { goto RELATION_CHECK_PASSED; }
-        for(SymbolLinkTable::iterator i=m_links.begin(); i!=m_links.end(); ++i) {
-            if(obj->findSymbol(i->first.c_str())!=NULL) { goto RELATION_CHECK_PASSED; }
-        }
-        {
-            unload(path);
-            m_objs.erase(path);
-            delete obj;
-            istPrint("DOL info: skipped %s\n", path.c_str());
-            return false;
-        }
-RELATION_CHECK_PASSED:;
+    // DOL_Module がない obj は無視
+    // .exe を構成する普通の .obj をロードすると、他の .obj がそちらを参照して問題を起こす可能性があるため
+    if(obj->findSymbol(g_symname_modulemarker)==NULL) {
+        unload(path);
+        m_objs.erase(path);
+        delete obj;
+        return false;
     }
 
     {
@@ -433,10 +441,43 @@ RELATION_CHECK_PASSED:;
 inline void CallOnLoadHandler(ObjFile *obj)   { if(Handler h=(Handler)obj->findSymbol(g_symname_onload))   { h(); } }
 inline void CallOnUnloadHandler(ObjFile *obj) { if(Handler h=(Handler)obj->findSymbol(g_symname_onunload)) { h(); } }
 
+void DynamicObjLoader::unload(ObjFile *obj)
+{
+    CallOnUnloadHandler(obj);
+    obj->eachSymbol([&](const stl::string &name, void*){ m_symbols.erase(name); });
+    delete obj;
+}
+
+void DynamicObjLoader::unload( const stl::string &path )
+{
+    ObjTable::iterator i = m_objs.find(path);
+    if(i!=m_objs.end()) {
+        unload(i->second);
+        m_objs.erase(i);
+    }
+}
+
+void DynamicObjLoader::unloadAll()
+{
+    for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
+        unload(i->second);
+    }
+    m_objs.clear();
+}
+
 bool DynamicObjLoader::link()
 {
+    // わかりやすいようにエラーハンドリング
+    if(m_objs.empty() && !m_links.empty()) {
+        istPrint("DOL fatal: シンボルを解決できませんでした。.obj がロードされていません。DOL_Module がついた .cpp がないようです。\n");
+        ::DebugBreak();
+        return false;
+    }
+
     // OnLoad が必要なやつがいない場合、新たにロードされたものはないはずなので何もしない
-    if(m_handle_onload.empty()) { return true; }
+    if(m_handle_onload.empty()) {
+        return true;
+    }
 
     // 全シンボルを 1 つの map に収集
     for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
@@ -468,48 +509,13 @@ bool DynamicObjLoader::link()
     return true;
 }
 
-void DynamicObjLoader::unload(ObjFile *obj)
-{
-    CallOnUnloadHandler(obj);
-    obj->eachSymbol([&](const stl::string &name, void*){ m_symbols.erase(name); });
-    delete obj;
-}
-
-void DynamicObjLoader::unload( const stl::string &path )
-{
-    ObjTable::iterator i = m_objs.find(path);
-    if(i!=m_objs.end()) {
-        unload(i->second);
-        m_objs.erase(i);
-    }
-}
-
-void DynamicObjLoader::unloadAll()
-{
-    while(!m_objs.empty()) {
-        ObjTable::iterator i=m_objs.begin();
-        unload(i->first);
-    }
-}
-
-void DynamicObjLoader::reloadAndLink()
+void DynamicObjLoader::update()
 {
     size_t n = 0;
     for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
-        if(load(i->first)) {
-            ++n;
-        }
+        if(load(i->first)) { ++n; }
     }
-    if(n > 0) {
-        link();
-    }
-}
-
-ObjFile* DynamicObjLoader::findObj( const stl::string &path )
-{
-    ObjTable::iterator i = m_objs.find(path);
-    if(i==m_objs.end()) { return NULL; }
-    return i->second;
+    if(n > 0) { link(); }
 }
 
 void* DynamicObjLoader::findSymbol( const stl::string &name )
@@ -672,7 +678,7 @@ public:
         m_srcdirs.push_back(sd);
     }
 
-    bool needsReloadAndLink() const
+    bool needsUpdate() const
     {
         if(m_build_has_just_completed) {
             m_build_has_just_completed = false;
@@ -691,10 +697,6 @@ private:
     HANDLE m_thread_watchfile;
 };
 
-class AutoLoader
-{
-
-};
 
 DynamicObjLoader *g_objloader = NULL;
 Builder *g_builder = NULL;
@@ -754,15 +756,15 @@ void DOL_UnloadAll()
     g_objloader->unloadAll();
 }
 
-void  DOL_Link()
+void DOL_Link()
 {
     g_objloader->link();
 }
 
 void DOL_Update()
 {
-    if(g_builder->needsReloadAndLink()) {
-        g_objloader->reloadAndLink();
+    if(g_builder->needsUpdate()) {
+        g_objloader->update();
     }
 }
 

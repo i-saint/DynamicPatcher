@@ -50,14 +50,14 @@ DOL_Export void UpdateParticles(Particle *particles, size_t num_particles)
             float d = len - uradius;
             if(d < 0.0f) {
                 XMFLOAT3 dir = diff / len;
-                rp.velocity += dir * (d * 0.1f);
+                rp.velocity += dir * (d * 0.2f);
             }
         }
     }
 
     // ’†S‚É‹z‚¢Šñ‚¹‚é
     {
-        const XMFLOAT3 gravity_center = XMFLOAT3(0.0f, -2.5f, 0.0f);
+        const XMFLOAT3 gravity_center = XMFLOAT3(0.0f, -3.0f, 0.0f);
         for(size_t ri=0; ri<num_particles; ++ri) {
             Particle &rp = particles[ri];
             XMFLOAT3 dir = Normalize(gravity_center - rp.position);

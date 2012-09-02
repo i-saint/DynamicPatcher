@@ -42,20 +42,17 @@
 #   define DOL_Symbol_Prefix "_"
 #endif // _WIN64
 
-// obj 側で使います。親 process から参照されるシンボルにつけます。mangling 問題を解決するためのもの。
+// obj 側で使います。親 process から参照されるシンボルにつけます。(mangling 問題解決のため)
 #define DOL_Export  extern "C"
 
 // obj, exe 両方で使います。
 // obj から exe の関数などを参照する場合、それが inline 展開や最適化で消えてたりするとクラッシュします。
-// 以下のマクロをつけておくとそれが抑止され、安全になります。
+// 以下のマクロをつけておくと消えるのが抑止され、安全になります。
 // また、obj で実装する class にもつけないと必要なシンボルが欠けることがあるようです。(詳細不詳。デストラクタ ("vector deleting destructor") で現象を確認)
 #define DOL_Fixate  __declspec(dllexport)
 
 // obj 側で使います。
-// exe から参照されるシンボルがない obj は、安全とメモリ節約のためロードされないようになっています。
-// このため、exe からは参照されないが他の obj からは参照される obj がある場合、必要なシンボルが欠ける可能性があります。
-// 以下のマクロはその問題の対処に使います。これをどこかに書いておけば exe から参照されているシンボルがなくても省かれないようになります。
-// (空の DOL_OnLoad() でも対処可能ですが、こちらの方が意味が明確になるので)
+// 動的にロードされる .obj だと明示します。これを書いておかないと DOL_Load() でロードできません。
 #define DOL_Module          DOL_Export void DOL_ModuleMarker() {}
 
 // obj 側で使います。引数には処理内容を書きます。このブロックはロード時に自動的に実行されます。
@@ -71,7 +68,7 @@
 #define DOL_DeclareFunction(ret, name, arg) extern ret (*name)arg
 #define DOL_DeclareVariable(type, name)     extern DOL_Variable<type> name
 
-// exe 側で使います。.obj から import する関数/変数
+// exe 側で使います。.obj から import する関数/変数を定義します。
 // 変数は実際には void* を cast operator をかまして返すオブジェクトなので若干注意が必要です。
 // 例えば int の変数を printf で出力する場合、明示的に int に cast しないと意図した結果になりません。
 #define DOL_ImportFunction(ret, name, arg)  ret (*name)arg=NULL; DOL_FunctionLink g_dol_link_##name##(name, DOL_Symbol_Prefix #name)
