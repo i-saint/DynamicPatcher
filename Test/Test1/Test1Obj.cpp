@@ -4,7 +4,9 @@
 #include "DynamicObjLoader.h"
 #include "Test1.h"
 
-DOL_Export const int g_test = 100;
+DOL_Module
+
+DOL_Export int g_test = 100;
 
 DOL_Export float FloatAdd(float a, float b)
 {

@@ -60,10 +60,10 @@ int main(int argc, _TCHAR* argv[])
     DOL_AddSourceDirectory(".\\");
 #ifdef _WIN64
     DOL_StartAutoRecompile("/m /p:Configuration=Release;Platform=x64", true);
-    DOL_LoadObjDirectory("x64\\Release");
+    DOL_Load("x64\\Release");
 #else // _WIN64
     DOL_StartAutoRecompile("/m /p:Configuration=Release;Platform=Win32", true);
-    DOL_LoadObjDirectory("Release");
+    DOL_Load("Release");
 #endif // _WIN64
     DOL_Link();
 
@@ -84,7 +84,7 @@ int main(int argc, _TCHAR* argv[])
         }
 
         ::Sleep(5000);
-        DOL_ReloadAndLink();
+        DOL_Update();
     }
 
     DOL_UnloadAll();

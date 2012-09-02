@@ -158,65 +158,14 @@ LRESULT CALLBACK    WndProc( HWND, UINT, WPARAM, LPARAM );
 void Render();
 
 
-//--------------------------------------------------------------------------------------
-// Entry point to the program. Initializes everything and goes into a message processing 
-// loop. Idle time is used to render the scene.
-//--------------------------------------------------------------------------------------
-int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow )
-{
-    UNREFERENCED_PARAMETER( hPrevInstance );
-    UNREFERENCED_PARAMETER( lpCmdLine );
-
-    DOL_AddSourceDirectory(".\\");
-#ifdef _WIN64
-    DOL_StartAutoRecompile("/m /p:Configuration=Release;Platform=x64", true);
-    DOL_LoadObjDirectory("x64\\Release");
-#else // _WIN64
-    DOL_StartAutoRecompile("/m /p:Configuration=Release;Platform=Win32", true);
-    DOL_LoadObjDirectory("Release");
-#endif // _WIN64
-    DOL_Link();
-
-    if( FAILED( InitWindow( hInstance, nCmdShow ) ) ) {
-        return 0;
-    }
-
-    if( FAILED( InitDevice() ) )
-    {
-        CleanupDevice();
-        return 0;
-    }
-
-    InitializeParticles(g_particles, _countof(g_particles));
-
-    // Main message loop
-    MSG msg = {0};
-    while( WM_QUIT != msg.message )
-    {
-        if( PeekMessage( &msg, NULL, 0, 0, PM_REMOVE ) )
-        {
-            TranslateMessage( &msg );
-            DispatchMessage( &msg );
-        }
-        else
-        {
-            UpdateParticles(g_particles, _countof(g_particles));
-            Render();
-            DOL_ReloadAndLink();
-        }
-    }
-
-    CleanupDevice();
-
-    return ( int )msg.wParam;
-}
-
 
 //--------------------------------------------------------------------------------------
 // Register class and create window
 //--------------------------------------------------------------------------------------
 HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
 {
+    const wchar_t *wndclassname = L"DOL_Test2_class";
+
     // Register class
     WNDCLASSEX wcex;
     wcex.cbSize = sizeof( WNDCLASSEX );
@@ -229,7 +178,7 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
     wcex.hCursor = LoadCursor( NULL, IDC_ARROW );
     wcex.hbrBackground = ( HBRUSH )( COLOR_WINDOW + 1 );
     wcex.lpszMenuName = NULL;
-    wcex.lpszClassName = L"ispc_SPH_class";
+    wcex.lpszClassName = wndclassname;
     wcex.hIconSm = 0;
     if( !RegisterClassEx( &wcex ) )
         return E_FAIL;
@@ -238,7 +187,7 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
     g_hInst = hInstance;
     RECT rc = { 0, 0, 1024, 768 };
     AdjustWindowRect( &rc, WS_OVERLAPPEDWINDOW, FALSE );
-    g_hWnd = CreateWindow( L"ispc_SPH_class", L"ispc test", WS_OVERLAPPEDWINDOW,
+    g_hWnd = CreateWindow( wndclassname, L"Dynamic Obj Loader Test", WS_OVERLAPPEDWINDOW,
                            CW_USEDEFAULT, CW_USEDEFAULT, rc.right - rc.left, rc.bottom - rc.top, NULL, NULL, hInstance,
                            NULL );
     if( !g_hWnd )
@@ -682,4 +631,56 @@ void Render()
     // Present our back buffer to our front buffer
     g_pSwapChain->Present( 1, 0 ); // vsync on
     //g_pSwapChain->Present( 0, 0 ); // vsync off
+}
+
+
+
+int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow )
+{
+    UNREFERENCED_PARAMETER( hPrevInstance );
+    UNREFERENCED_PARAMETER( lpCmdLine );
+
+    DOL_AddSourceDirectory(".\\");
+#ifdef _WIN64
+    DOL_StartAutoRecompile("/m /p:Configuration=Release;Platform=x64", true);
+    DOL_Load("x64\\Release");
+#else // _WIN64
+    DOL_StartAutoRecompile("/m /p:Configuration=Release;Platform=Win32", true);
+    DOL_Load("Release");
+#endif // _WIN64
+    DOL_Link();
+
+    if( FAILED( InitWindow( hInstance, nCmdShow ) ) ) {
+        return 0;
+    }
+
+    if( FAILED( InitDevice() ) )
+    {
+        CleanupDevice();
+        return 0;
+    }
+
+    InitializeParticles(g_particles, _countof(g_particles));
+
+    // Main message loop
+    MSG msg = {0};
+    while( WM_QUIT != msg.message )
+    {
+        if( PeekMessage( &msg, NULL, 0, 0, PM_REMOVE ) )
+        {
+            TranslateMessage( &msg );
+            DispatchMessage( &msg );
+        }
+        else
+        {
+            UpdateParticles(g_particles, _countof(g_particles));
+            Render();
+            DOL_Update();
+        }
+    }
+
+    CleanupDevice();
+
+    DOL_UnloadAll();
+    return ( int )msg.wParam;
 }

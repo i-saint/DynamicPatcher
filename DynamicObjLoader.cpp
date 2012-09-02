@@ -18,8 +18,9 @@ namespace dol {
 
 namespace stl = std;
 
-const char g_symname_onload[] = DOL_Symbol_Prefix "DOL_OnLoadHandler";
-const char g_symname_onunload[] = DOL_Symbol_Prefix "DOL_OnUnloadHandler";
+const char g_symname_modulemarker[] = DOL_Symbol_Prefix "DOL_ModuleMarker";
+const char g_symname_onload[]       = DOL_Symbol_Prefix "DOL_OnLoadHandler";
+const char g_symname_onunload[]     = DOL_Symbol_Prefix "DOL_OnUnloadHandler";
 
 
 #define istPrint(...) DebugPrint(__VA_ARGS__)
@@ -104,7 +105,7 @@ bool MapFile(const stl::string &path, void *&o_data, size_t &o_size)
             // なので成功するまでアドレスを進めつつリトライ…。
             const size_t step = 0x10000; // 64kb
             for(size_t i=0; o_data==NULL; ++i) {
-                o_data = ::VirtualAlloc((void*)((size_t)exe_base+(step*i)), o_size, MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
+                o_data = ::VirtualAlloc((void*)((size_t)exe_base+(step*i)), o_size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
             }
             fseek(f, 0, SEEK_SET);
             fread(o_data, 1, o_size, f);
@@ -140,6 +141,12 @@ void* FindSymbolInExe(const char *name)
     return (void*)sinfo->Address;
 }
 
+bool IsDirectory(const char *path)
+{
+    DWORD attr = ::GetFileAttributesA(path);
+    return (attr & FILE_ATTRIBUTE_DIRECTORY)!=0;
+}
+
 
 
 class DynamicObjLoader;
@@ -154,7 +161,7 @@ public:
     void unload();
 
     // 外部シンボルのリンケージ解決
-    void link();
+    bool link();
 
     void* findSymbol(const char *name);
 
@@ -189,6 +196,7 @@ public:
     // .obj のロードを行う。
     // 既に読まれているファイルを指定した場合リロード処理を行う。
     bool load(const stl::string &path);
+    void unload(ObjFile *obj);
     void unload(const stl::string &path);
     void unloadAll();
     void reloadAndLink();
@@ -196,7 +204,7 @@ public:
     // 依存関係の解決処理。ロード後実行前に必ず呼ぶ必要がある。
     // load の中で link までやってもいいが、.obj の数が増えるほど無駄が多くなる上、
     // 本当に未解決なシンボルを判別しづらくなるので手順を分割した。
-    void link();
+    bool link();
 
     // ロード済み obj 検索
     ObjFile* findObj(const stl::string &path);
@@ -264,14 +272,11 @@ bool ObjFile::load(const stl::string &path)
 #else
     if( pDosHeader->e_magic!=IMAGE_FILE_MACHINE_I386 || pDosHeader->e_sp!=0 ) {
 #endif
-        istPrint("DOL error: %s 認識できないフォーマットです。/GL (プログラム全体の最適化) 有効でコンパイルされている可能性があります。\n"
+        istPrint("DOL fatal: %s 認識できないフォーマットです。/GL (プログラム全体の最適化) 有効でコンパイルされている可能性があります。\n"
             , m_filepath.c_str());
-        DebugBreak();
+        ::DebugBreak();
         return false;
     }
-
-    DWORD old_protect_flag;
-    ::VirtualProtect((LPVOID)m_data, m_datasize, PAGE_READONLY, &old_protect_flag);
 
     // 以下 symbol 収集処理
     PIMAGE_FILE_HEADER pImageHeader = (PIMAGE_FILE_HEADER)ImageBase;
@@ -298,11 +303,8 @@ bool ObjFile::load(const stl::string &path)
 }
 
 // 外部シンボルのリンケージ解決
-void ObjFile::link()
+bool ObjFile::link()
 {
-    DWORD old_protect_flag;
-    ::VirtualProtect((LPVOID)m_data, m_datasize, PAGE_EXECUTE_READWRITE, &old_protect_flag);
-
     size_t ImageBase = (size_t)(m_data);
     PIMAGE_FILE_HEADER pImageHeader = (PIMAGE_FILE_HEADER)ImageBase;
     PIMAGE_SECTION_HEADER pSectionHeader = (PIMAGE_SECTION_HEADER)(ImageBase + sizeof(IMAGE_FILE_HEADER) + pImageHeader->SizeOfOptionalHeader);
@@ -325,9 +327,9 @@ void ObjFile::link()
                 const char *rname = GetSymbolName(StringTable, rsym);
                 size_t rdata = (size_t)m_loader->resolveExternalSymbol(rname);
                 if(rdata==NULL) {
-                    istPrint("DOL error: %s が参照するシンボル %s を解決できませんでした。\n", m_filepath.c_str(), rname);
-                    DebugBreak();
-                    continue;
+                    istPrint("DOL fatal: %s が参照するシンボル %s を解決できませんでした。\n", m_filepath.c_str(), rname);
+                    ::DebugBreak();
+                    return false;
                 }
                 // 相対アドレス指定の場合相対アドレスに変換
 #ifdef _WIN64
@@ -346,8 +348,9 @@ void ObjFile::link()
         i += pSymbolTable[i].NumberOfAuxSymbols;
     }
 
-    // global 変数が入ってる可能性があるのでフルアクセス可能にしておく必要がある
-    ::VirtualProtect((LPVOID)m_data, m_datasize, PAGE_EXECUTE_READWRITE, &old_protect_flag);
+    // 安全のため↓のように write protect をかけたいところだが、global 変数を含む可能性があるのでフルアクセス可能にしておく必要がある
+    //::VirtualProtect((LPVOID)m_data, m_datasize, PAGE_EXECUTE_READ, &old_protect_flag);
+    return true;
 }
 
 void* ObjFile::findSymbol(const char *name)
@@ -392,8 +395,9 @@ bool DynamicObjLoader::load( const stl::string &path )
     // obj 内のシンボルがどこからも参照されておらず、OnLoad などのハンドラも持たないならば破棄する。
     // 該当する obj は exe を構成するものと予想され、それをロードして他の .obj から参照すると問題を起こす可能性がある。
     {
-        if(obj->findSymbol(g_symname_onload)!=NULL)     { goto RELATION_CHECK_PASSED; }
-        if(obj->findSymbol(g_symname_onunload)!=NULL)   { goto RELATION_CHECK_PASSED; }
+        if(obj->findSymbol(g_symname_modulemarker)!=NULL)   { goto RELATION_CHECK_PASSED; }
+        if(obj->findSymbol(g_symname_onload)!=NULL)         { goto RELATION_CHECK_PASSED; }
+        if(obj->findSymbol(g_symname_onunload)!=NULL)       { goto RELATION_CHECK_PASSED; }
         for(SymbolLinkTable::iterator i=m_links.begin(); i!=m_links.end(); ++i) {
             if(obj->findSymbol(i->first.c_str())!=NULL) { goto RELATION_CHECK_PASSED; }
         }
@@ -401,17 +405,17 @@ bool DynamicObjLoader::load( const stl::string &path )
             unload(path);
             m_objs.erase(path);
             delete obj;
+            istPrint("DOL info: skipped %s\n", path.c_str());
             return false;
         }
 RELATION_CHECK_PASSED:;
     }
 
-    // 同名 obj が既にロード済みであれば、適切に unload 処理して新しいものに差し替える
     {
         ObjTable::iterator i = m_objs.find(path);
+        // 同名 obj が既にロード済みであれば unload を挟む
         if(i!=m_objs.end()) {
-            i->second->eachSymbol([&](const stl::string &name, void*){ m_symbols.erase(name); });
-            delete i->second;
+            unload(i->second);
             i->second = obj;
         }
         else {
@@ -422,16 +426,17 @@ RELATION_CHECK_PASSED:;
     // OnLoad を呼ぶリストに追加。リンク処理の後に呼ぶ
     m_handle_onload.push_back(obj);
 
+    istPrint("DOL info: loaded %s\n", path.c_str());
     return true;
 }
 
 inline void CallOnLoadHandler(ObjFile *obj)   { if(Handler h=(Handler)obj->findSymbol(g_symname_onload))   { h(); } }
 inline void CallOnUnloadHandler(ObjFile *obj) { if(Handler h=(Handler)obj->findSymbol(g_symname_onunload)) { h(); } }
 
-void DynamicObjLoader::link()
+bool DynamicObjLoader::link()
 {
     // OnLoad が必要なやつがいない場合、新たにロードされたものはないはずなので何もしない
-    if(m_handle_onload.empty()) { return; }
+    if(m_handle_onload.empty()) { return true; }
 
     // 全シンボルを 1 つの map に収集
     for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
@@ -439,33 +444,42 @@ void DynamicObjLoader::link()
     }
     // ↑で集めた map を使うことで、obj 間シンボルもリンク
     for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
-        i->second->link();
+        if(!i->second->link()) {
+            return false;
+        }
     }
     // exe 側から参照されているシンボルを適切に張り替える
     for(SymbolLinkTable::iterator i=m_links.begin(); i!=m_links.end(); ++i) {
         void *sym = findSymbol(i->first);
         if(sym==NULL) {
-            istPrint("DOL error: 参照するシンボル %s を解決できませんでした。\n", i->first.c_str());
-            DebugBreak();
+            istPrint("DOL fatal: シンボル %s を解決できませんでした。\n", i->first.c_str());
+            ::DebugBreak();
+            return false;
         }
         *i->second = sym;
     }
+    istPrint("DOL info: link completed\n");
 
     // 新規ロードされているオブジェクトに OnLoad があれば呼ぶ
     for(size_t i=0; i<m_handle_onload.size(); ++i) {
         CallOnLoadHandler(m_handle_onload[i]);
     }
     m_handle_onload.clear();
+    return true;
+}
+
+void DynamicObjLoader::unload(ObjFile *obj)
+{
+    CallOnUnloadHandler(obj);
+    obj->eachSymbol([&](const stl::string &name, void*){ m_symbols.erase(name); });
+    delete obj;
 }
 
 void DynamicObjLoader::unload( const stl::string &path )
 {
     ObjTable::iterator i = m_objs.find(path);
     if(i!=m_objs.end()) {
-        ObjFile *obj = i->second;
-        CallOnUnloadHandler(obj);
-        obj->eachSymbol([&](const stl::string &name, void*){ m_symbols.erase(name); });
-        delete obj;
+        unload(i->second);
         m_objs.erase(i);
     }
 }
@@ -483,13 +497,11 @@ void DynamicObjLoader::reloadAndLink()
     size_t n = 0;
     for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
         if(load(i->first)) {
-            istPrint("DOL info: reloading %s\n", i->first.c_str());
             ++n;
         }
     }
     if(n > 0) {
         link();
-        istPrint("DOL info: link done.\n");
     }
 }
 
@@ -593,8 +605,8 @@ public:
         if(create_console) {
             ::AllocConsole();
         }
-        istPrint("DOL info: starting recompile thread.\n");
         m_thread_watchfile = (HANDLE)_beginthread( threadWatchFile, 0, this );
+        istPrint("DOL info: recompile thread started\n");
     }
 
     static void threadWatchFile( LPVOID arg )
@@ -637,7 +649,7 @@ public:
 
     void execBuild()
     {
-        istPrint("DOL info: recompiling.\n");
+        istPrint("DOL info: recompile begin\n");
         stl::string command = m_msbuild;
         command+=' ';
         command+=m_msbuild_option;
@@ -651,6 +663,7 @@ public:
             ::WaitForSingleObject(pi.hProcess, INFINITE);
             m_build_has_just_completed = true;
         }
+        istPrint("DOL info: recompile end\n");
     }
 
     void addSourceDirectory(const char *path)
@@ -707,9 +720,28 @@ public:
 
 using namespace dol;
 
-void  DOL_LoadObj(const char *path)
+void  DOL_Load(const char *path)
 {
-    g_objloader->load(path);
+    if(IsDirectory(path)) {
+        stl::string tmppath;
+        stl::string key = path;
+        key += "\\*.obj";
+
+        WIN32_FIND_DATAA wfdata;
+        HANDLE handle = ::FindFirstFileA(key.c_str(), &wfdata);
+        if(handle!=INVALID_HANDLE_VALUE) {
+            do {
+                tmppath = path;
+                tmppath += "\\";
+                tmppath += wfdata.cFileName;
+                g_objloader->load(tmppath.c_str());
+            } while(::FindNextFileA(handle, &wfdata));
+            ::FindClose(handle);
+        }
+    }
+    else {
+        g_objloader->load(path);
+    }
 }
 
 void DOL_Unload(const char *path)
@@ -727,7 +759,7 @@ void  DOL_Link()
     g_objloader->link();
 }
 
-void DOL_ReloadAndLink()
+void DOL_Update()
 {
     if(g_builder->needsReloadAndLink()) {
         g_objloader->reloadAndLink();
@@ -749,25 +781,6 @@ void DOL_AddSourceDirectory(const char *path)
 {
     g_builder->addSourceDirectory(path);
 };
-
-void DOL_LoadObjDirectory(const char *path)
-{
-    stl::string tmppath;
-    stl::string key = path;
-    key += "\\*.obj";
-
-    WIN32_FIND_DATAA wfdata;
-    HANDLE handle = ::FindFirstFileA(key.c_str(), &wfdata);
-    if(handle!=INVALID_HANDLE_VALUE) {
-        do {
-            tmppath = path;
-            tmppath += "\\";
-            tmppath += wfdata.cFileName;
-            g_objloader->load(tmppath.c_str());
-        } while(::FindNextFileA(handle, &wfdata));
-        ::FindClose(handle);
-    }
-}
 
 
 #endif // DOL_Static_Link

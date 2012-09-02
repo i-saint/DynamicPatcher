@@ -11,7 +11,7 @@
 //      .obj から exe や dll の関数をリンクする際、文字列から関数のアドレスを取れないといけないため
 // ・exe 本体がリンクしていない外部 dll の関数や .lib の関数は呼べない
 //      超頑張って .lib を読めば対応できそうだが…
-// ・.obj <-> exe 間で参照されるシンボルは、inline 展開や最適化で消えないように注意が必要
+// ・obj <-> exe 間で参照されるシンボルは、inline 展開や最適化で消えないように注意が必要
 //      DOL_Fixate で対処可能。
 // ・virtual 関数を使う場合、RTTI を無効にしておく必要がある
 //      RTTI の有無で vtable の内容が変わってしまうため。
@@ -22,74 +22,78 @@
 //      デバッグ情報はロードしていないため。これは解決困難で諦めモード。
 // ・.obj 内の global オブジェクトのコンストラクタ/デストラクタは呼ばれない
 //      デストラクタは atexit() に登録されるため、.obj リロードで終了時クラッシュを招く。なので意図的に対応していない。
-//      ロード/アンロード時に呼ばれる DOL_OnLoad / DOL_OnUnload で代替する想定。
+//      DOL_OnLoad / DOL_OnUnload で代替する想定。
 
 #ifndef __DynamicObjLoader_h__
 #define __DynamicObjLoader_h__
 
-
-//#define DOL_Static_Link
 
 // 一応非 Windows でもビルドエラーにはならないようにしておく
 #if !defined(_WIN32) && !defined(DOL_Static_Link)
 #   define DOL_Static_Link
 #endif
 
+
 #ifndef DOL_Static_Link
+
 #ifdef _WIN64
 #   define DOL_Symbol_Prefix
 #else // _WIN64
 #   define DOL_Symbol_Prefix "_"
 #endif // _WIN64
 
-
 // obj 側で使います。親 process から参照されるシンボルにつけます。mangling 問題を解決するためのもの。
 #define DOL_Export  extern "C"
 
+// obj, exe 両方で使います。
+// obj から exe の関数などを参照する場合、それが inline 展開や最適化で消えてたりするとクラッシュします。
+// 以下のマクロをつけておくとそれが抑止され、安全になります。
+// また、obj で実装する class にもつけないと必要なシンボルが欠けることがあるようです。(詳細不詳。デストラクタ ("vector deleting destructor") で現象を確認)
+#define DOL_Fixate  __declspec(dllexport)
+
+// obj 側で使います。
+// exe から参照されるシンボルがない obj は、安全とメモリ節約のためロードされないようになっています。
+// このため、exe からは参照されないが他の obj からは参照される obj がある場合、必要なシンボルが欠ける可能性があります。
+// 以下のマクロはその問題の対処に使います。これをどこかに書いておけば exe から参照されているシンボルがなくても省かれないようになります。
+// (空の DOL_OnLoad() でも対処可能ですが、こちらの方が意味が明確になるので)
+#define DOL_Module          DOL_Export void DOL_ModuleMarker() {}
+
 // obj 側で使います。引数には処理内容を書きます。このブロックはロード時に自動的に実行されます。
-// また、もうひとつ特殊な役割を持ちます。
-// .exe から参照されているシンボルがなく、OnLoad/OnUnload もない .obj は安全のためロードされないようになっています。
-// このため、.exe からは参照されないが他の .obj からは参照される .obj はこれをつけて省かれないようにする必要があります。(内容は空でも ok)
+// DOL_OnUnload() と併せて、serialize/deserialize などに用います。
 #define DOL_OnLoad(...)     DOL_Export void DOL_OnLoadHandler()   { __VA_ARGS__ }
 
 // obj 側で使います。引数には処理内容を書きます。このブロックはアンロード時に自動的に実行されます。
 #define DOL_OnUnload(...)   DOL_Export void DOL_OnUnloadHandler() { __VA_ARGS__ }
 
-// obj, exe 両方で使います。
-// 最適化で消えたり inline 展開されたりするのを防ぐためのもので、.obj から参照される exe の関数や変数につけると安全になります。
-// また、.obj で実装する class にもつけないと必要なシンボルが欠けることがあるようです。(詳細不詳。デストラクタ ("vector deleting destructor") で現象を確認)
-#define DOL_Fixate  __declspec(dllexport)
-
-// exe 側で使います。.obj の関数の宣言
-// .obj の関数は exe 側では実際には関数ポインタなので、複数 cpp に定義があるとリンクエラーになってしまいます。
-// 定義 (DOL_ObjFunc) は一箇所だけにして、他は宣言を見るだけにする必要があります。
+// exe 側で使います。obj から import する関数/変数を宣言します。
+// obj から import してくるものは exe 側では実際にはポインタなので、複数 cpp に定義があるとリンクエラーになってしまいます。
+// 定義 (DOL_ImportFunction/Variable) は一箇所だけにして、他は宣言を見るだけにする必要があります。
 #define DOL_DeclareFunction(ret, name, arg) extern ret (*name)arg
-#define DOL_DeclareVariable(type, name)     extern type *name
+#define DOL_DeclareVariable(type, name)     extern DOL_Variable<type> name
 
-// exe 側で使います。.obj の関数の定義
-#define DOL_ImportFunction(ret, name, arg) ret (*name)arg=NULL; DOL_FunctionLink g_dol_link_##name##(name, DOL_Symbol_Prefix #name)
-
-// exe 側で使います。.obj の変数の定義
-#define DOL_ImportVariable(type, name)    DOL_Variable<type> name; DOL_VariableLink g_dol_link_##name##(name, DOL_Symbol_Prefix #name)
+// exe 側で使います。.obj から import する関数/変数
+// 変数は実際には void* を cast operator をかまして返すオブジェクトなので若干注意が必要です。
+// 例えば int の変数を printf で出力する場合、明示的に int に cast しないと意図した結果になりません。
+#define DOL_ImportFunction(ret, name, arg)  ret (*name)arg=NULL; DOL_FunctionLink g_dol_link_##name##(name, DOL_Symbol_Prefix #name)
+#define DOL_ImportVariable(type, name)      DOL_Variable<type> name; DOL_VariableLink g_dol_link_##name##(name, DOL_Symbol_Prefix #name)
 
 
 // 以下 exe 側で使う API
 
-// .obj をロードします。ロードが終わった後は DOL_Link() でリンクする必要があります。
-void DOL_LoadObj(const char *path);
-
-// 指定ディレクトリ以下の全 .obj をロードします。こちらも後に DOL_Link() が必要です。
-void DOL_LoadObjDirectory(const char *path);
+// .obj をロードします。
+// path はファイル (.obj) でもディレクトリでもよく、ディレクトリの場合 .obj を探してロードします (サブディレクトリ含む)。
+// ロードが終わった後は DOL_Link() でリンクする必要があります。
+void DOL_Load(const char *path);
 
 // リンクを行います。 必要なものを全てロードした後に 1 度これを呼ぶ必要があります。
 // .obj に DOL_OnLoad() のブロックがある場合、このタイミングで呼ばれます。
 void DOL_Link();
 
-// 全 .obj をリロードし、再リンクします。
+// 更新された .obj があればそれをリロードし、再リンクします。
 // .cpp の再コンパイルは別のスレッドで自動的に行われますが、.obj のリロードは勝手にやると問題が起きるので、
 // これを呼んでユーザー側で適切なタイミングで行う必要があります。
 // 再コンパイルが行われていなかった場合なにもしないので、毎フレーム呼んでも大丈夫です。
-void DOL_ReloadAndLink();
+void DOL_Update();
 
 // .obj をアンロードします。
 // 対象 .obj に DOL_OnUnload() のブロックがある場合、このタイミングで呼ばれます。
@@ -99,18 +103,11 @@ void DOL_UnloadAll();
 
 // 自動ビルド (.cpp の変更を検出したら自動的にビルド開始) を開始します。
 void DOL_StartAutoRecompile(const char *build_options, bool create_console_window);
-// 自動ビルド用の監視ディレクトリ。このディレクトリ以下の .cpp や .h の変更を検出したらビルドが始まります。
+// 自動ビルド用の監視ディレクトリ。このディレクトリ以下のファイルの変更を検出したらビルドが始まります。
 void DOL_AddSourceDirectory(const char *path);
 
 
-// internal
-void DOL_LinkSymbol(const char *name, void *&target);
-class DOL_FunctionLink
-{
-public:
-    template<class FuncPtr>
-    DOL_FunctionLink(FuncPtr &v, const char *name) { DOL_LinkSymbol(name, (void*&)v); }
-};
+// 以下内部実装用
 
 template<class T>
 class DOL_Variable
@@ -125,6 +122,15 @@ private:
     mutable void *m_sym;
 };
 
+void DOL_LinkSymbol(const char *name, void *&target);
+
+class DOL_FunctionLink
+{
+public:
+    template<class FuncPtr>
+    DOL_FunctionLink(FuncPtr &v, const char *name) { DOL_LinkSymbol(name, (void*&)v); }
+};
+
 class DOL_VariableLink
 {
 public:
@@ -137,23 +143,23 @@ public:
 
 
 #define DOL_Export
+#define DOL_Fixate
+#define DOL_Module
 #define DOL_OnLoad(...)
 #define DOL_OnUnload(...)
-#define DOL_Fixate
 #define DOL_DeclareFunction(ret, name, arg) ret name arg
 #define DOL_DeclareVariable(type, name)     extern type name
 #define DOL_ImportFunction(ret, name, arg)  ret name arg
 #define DOL_ImportVariable(type, name)      extern type name
 
-#define DOL_LoadObj(path)
-#define DOL_ReloadAndLink()
+#define DOL_Load(path)
+#define DOL_Update()
 #define DOL_Unload(path)
 #define DOL_UnloadAll()
 #define DOL_Link()
 
 #define DOL_StartAutoRecompile(...)
 #define DOL_AddSourceDirectory(...)
-#define DOL_LoadObjDirectory(...)
 
 
 #endif // DOL_Static_Link
