@@ -136,7 +136,6 @@ ID3D11Buffer*                       g_pCBChangesEveryFrame = NULL;
 XMFLOAT4                            g_vMeshColor( 0.7f, 0.7f, 0.7f, 1.0f );
 PerspectiveCamera                   g_camera;
 
-#define MAX_PARTICLES 2048
 Particle g_particles[MAX_PARTICLES];
 
 
@@ -554,7 +553,7 @@ HRESULT InitDevice()
 
     // camera
     g_camera.setProjection( XMConvertToRadians(45.0f), width / (FLOAT)height, 0.1f, 100.0f );
-    g_camera.setView(XMVectorSet( 0.0f, 10.0f, -12.5f, 0.0f ), XMVectorSet( 0.0f, 0.0f, 0.0f, 0.0f ), XMVectorSet( 0.0f, 0.0f, -1.0f, 0.0f ));
+    g_camera.setView(XMVectorSet( 0.0f, 10.0f, -12.5f, 0.0f ), XMVectorSet( 0.0f, 0.0f, 0.0f, 0.0f ), XMVectorSet( 0.0f, 1.0f, 0.0f, 0.0f ));
 
     return S_OK;
 }
@@ -640,7 +639,7 @@ void Render()
         CBChangesEveryFrame cb;
         XMVECTOR eye = g_camera.getEye();
         {
-            XMMATRIX rot = XMMatrixRotationZ(XMConvertToRadians(0.1f));
+            XMMATRIX rot = XMMatrixRotationY(XMConvertToRadians(0.1f));
             eye = XMVector4Transform(eye, rot);
         }
         g_camera.setEye(eye);
