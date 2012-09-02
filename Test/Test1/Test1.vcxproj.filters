@@ -10,7 +10,7 @@
     <ClInclude Include="Test1.h">
       <Filter>Test1</Filter>
     </ClInclude>
-    <ClInclude Include="..\DynamicObjLoader.h">
+    <ClInclude Include="..\..\DynamicObjLoader.h">
       <Filter>DynamicObjLoader</Filter>
     </ClInclude>
   </ItemGroup>
@@ -21,11 +21,11 @@
     <ClCompile Include="Test1.cpp">
       <Filter>Test1</Filter>
     </ClCompile>
-    <ClCompile Include="..\DynamicObjLoader.cpp">
-      <Filter>DynamicObjLoader</Filter>
-    </ClCompile>
     <ClCompile Include="Test1Obj.cpp">
       <Filter>Test1</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\DynamicObjLoader.cpp">
+      <Filter>DynamicObjLoader</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

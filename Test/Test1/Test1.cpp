@@ -53,6 +53,7 @@ DOL_ImportFunction(void, CallExternalFunc, ());
 DOL_ImportFunction(void, CallExeFunc, ());
 DOL_ImportFunction(void, IHogeReceiver, (IHoge*));
 DOL_ImportFunction(IHoge*, CreateObjHoge, ());
+DOL_ImportVariable(int, g_test);
 
 int main(int argc, _TCHAR* argv[])
 {
@@ -67,6 +68,8 @@ int main(int argc, _TCHAR* argv[])
     DOL_Link();
 
     for(;;) {
+        g_test += 10;
+        istPrint("g_test: %d\n", (int)g_test);
         istPrint("%.2f\n", FloatAdd(1.0f, 2.0f));
         CallExternalFunc();
         CallExeFunc();

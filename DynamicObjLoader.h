@@ -44,16 +44,16 @@
 
 
 // obj 側で使います。親 process から参照されるシンボルにつけます。mangling 問題を解決するためのもの。
-#define DOL_ObjExport   extern "C"
+#define DOL_Export  extern "C"
 
 // obj 側で使います。引数には処理内容を書きます。このブロックはロード時に自動的に実行されます。
 // また、もうひとつ特殊な役割を持ちます。
 // .exe から参照されているシンボルがなく、OnLoad/OnUnload もない .obj は安全のためロードされないようになっています。
 // このため、.exe からは参照されないが他の .obj からは参照される .obj はこれをつけて省かれないようにする必要があります。(内容は空でも ok)
-#define DOL_OnLoad(...)     DOL_ObjExport void DOL_OnLoadHandler()   { __VA_ARGS__ }
+#define DOL_OnLoad(...)     DOL_Export void DOL_OnLoadHandler()   { __VA_ARGS__ }
 
 // obj 側で使います。引数には処理内容を書きます。このブロックはアンロード時に自動的に実行されます。
-#define DOL_OnUnload(...)   DOL_ObjExport void DOL_OnUnloadHandler() { __VA_ARGS__ }
+#define DOL_OnUnload(...)   DOL_Export void DOL_OnUnloadHandler() { __VA_ARGS__ }
 
 // obj, exe 両方で使います。
 // 最適化で消えたり inline 展開されたりするのを防ぐためのもので、.obj から参照される exe の関数や変数につけると安全になります。
@@ -63,13 +63,14 @@
 // exe 側で使います。.obj の関数の宣言
 // .obj の関数は exe 側では実際には関数ポインタなので、複数 cpp に定義があるとリンクエラーになってしまいます。
 // 定義 (DOL_ObjFunc) は一箇所だけにして、他は宣言を見るだけにする必要があります。
-#define DOL_DeclareObjFunc(ret, name, ...)  extern ret (*name)(__VA_ARGS__)
+#define DOL_DeclareFunction(ret, name, arg) extern ret (*name)arg
+#define DOL_DeclareVariable(type, name)     extern type *name
 
 // exe 側で使います。.obj の関数の定義
-#define DOL_ObjFunc(ret, name, ...) ret (*name)(__VA_ARGS__)=NULL; DOL_FunctionLink g_rlcpp_link_##name##(name, DOL_Symbol_Prefix #name)
+#define DOL_ImportFunction(ret, name, arg) ret (*name)arg=NULL; DOL_FunctionLink g_dol_link_##name##(name, DOL_Symbol_Prefix #name)
 
 // exe 側で使います。.obj の変数の定義
-#define DOL_ObjValue(type, name)    type *name=NULL
+#define DOL_ImportVariable(type, name)    DOL_Variable<type> name; DOL_VariableLink g_dol_link_##name##(name, DOL_Symbol_Prefix #name)
 
 
 // 以下 exe 側で使う API
@@ -108,22 +109,41 @@ class DOL_FunctionLink
 {
 public:
     template<class FuncPtr>
-    DOL_FunctionLink(FuncPtr &v, const char *name)
-    {
-        DOL_LinkSymbol(name, (void*&)v);
-    }
+    DOL_FunctionLink(FuncPtr &v, const char *name) { DOL_LinkSymbol(name, (void*&)v); }
+};
+
+template<class T>
+class DOL_Variable
+{
+public:
+    DOL_Variable() : m_sym(NULL) {}
+    DOL_Variable& operator=(const DOL_Variable &o) { (T&)(*this)=(T&)o; }
+    void*& get() { return m_sym; }
+    operator T&() const { return *reinterpret_cast<T*>(m_sym); }
+    T* operator&() const { return reinterpret_cast<T*>(m_sym); }
+private:
+    mutable void *m_sym;
+};
+
+class DOL_VariableLink
+{
+public:
+    template<class T>
+    DOL_VariableLink(DOL_Variable<T> &v, const char *name) { DOL_LinkSymbol(name, v.get()); }
 };
 
 
 #else // DOL_Static_Link
 
 
-#define DOL_ObjExport
+#define DOL_Export
 #define DOL_OnLoad(...)
 #define DOL_OnUnload(...)
 #define DOL_Fixate
-#define DOL_DeclareObjFunc(ret, name, ...)    ret name(__VA_ARGS__)
-#define DOL_ObjFunc(ret, name, ...)           ret name(__VA_ARGS__)
+#define DOL_DeclareFunction(ret, name, arg) ret name arg
+#define DOL_DeclareVariable(type, name)     extern type name
+#define DOL_ImportFunction(ret, name, arg)  ret name arg
+#define DOL_ImportVariable(type, name)      extern type name
 
 #define DOL_LoadObj(path)
 #define DOL_ReloadAndLink()

@@ -13,14 +13,14 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\DynamicObjLoader.cpp">
-      <Filter>DynamicObjLoader</Filter>
-    </ClCompile>
     <ClCompile Include="Test2.cpp">
       <Filter>Test2</Filter>
     </ClCompile>
     <ClCompile Include="Test2Obj.cpp">
       <Filter>Test2</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\DynamicObjLoader.cpp">
+      <Filter>DynamicObjLoader</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -29,11 +29,11 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\DynamicObjLoader.h">
-      <Filter>DynamicObjLoader</Filter>
-    </ClInclude>
     <ClInclude Include="Test2.h">
       <Filter>Test2</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\DynamicObjLoader.h">
+      <Filter>DynamicObjLoader</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

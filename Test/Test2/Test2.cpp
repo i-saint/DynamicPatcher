@@ -143,6 +143,11 @@ Particle g_particles[MAX_PARTICLES];
 DOL_ImportFunction(void, InitializeParticles, (Particle *particles, size_t num_particles));
 DOL_ImportFunction(void, UpdateParticles, (Particle *particles, size_t num_particles));
 
+DOL_Fixate float GenRand()
+{
+    return float((rand()-(RAND_MAX/2))*2) / (float)RAND_MAX;
+}
+
 
 //--------------------------------------------------------------------------------------
 // Forward declarations
@@ -196,7 +201,9 @@ int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
         }
         else
         {
+            UpdateParticles(g_particles, _countof(g_particles));
             Render();
+            DOL_ReloadAndLink();
         }
     }
 
@@ -547,7 +554,7 @@ HRESULT InitDevice()
 
     // camera
     g_camera.setProjection( XMConvertToRadians(45.0f), width / (FLOAT)height, 0.1f, 100.0f );
-    g_camera.setView(XMVectorSet( 0.0f, -10.0f, -12.5f, 0.0f ), XMVectorSet( 0.0f, 0.0f, 0.0f, 0.0f ), XMVectorSet( 0.0f, 0.0f, -1.0f, 0.0f ));
+    g_camera.setView(XMVectorSet( 0.0f, 10.0f, -12.5f, 0.0f ), XMVectorSet( 0.0f, 0.0f, 0.0f, 0.0f ), XMVectorSet( 0.0f, 0.0f, -1.0f, 0.0f ));
 
     return S_OK;
 }
@@ -600,14 +607,6 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam 
     }
 
     return 0;
-}
-
-
-
-
-inline float GenRand()
-{
-    return float((rand()-(RAND_MAX/2))*2) / (float)RAND_MAX;
 }
 
 

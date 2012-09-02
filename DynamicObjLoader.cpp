@@ -57,8 +57,20 @@ bool InitializeDebugSymbol(HANDLE proc=::GetCurrentProcess())
 
 void GetExeModuleName(char *o_name)
 {
+    const char *exefullpath = NULL;
+    char _exefullpath[MAX_PATH];
+    // argv から .exe のフルパスを取得
+    // エントリポイントが main/WinMain の時は __argv が有効、wmain か wWinMain のときは __wargv が有効
+    if(__argv!=NULL) {
+        exefullpath = __argv[0];
+    }
+    else if(__wargv!=NULL) {
+        wcstombs(_exefullpath, __wargv[0], MAX_PATH);
+        exefullpath = _exefullpath;
+    }
+
+    // フルパスからファイル名を抽出
     size_t i = 0;
-    const char *exefullpath = __argv[0];
     for(;;) {
         if(exefullpath[i]==0) { break; }
         if(exefullpath[i]=='\\') {
@@ -252,6 +264,9 @@ bool ObjFile::load(const stl::string &path)
 #else
     if( pDosHeader->e_magic!=IMAGE_FILE_MACHINE_I386 || pDosHeader->e_sp!=0 ) {
 #endif
+        istPrint("DOL error: %s 認識できないフォーマットです。/GL (プログラム全体の最適化) 有効でコンパイルされている可能性があります。\n"
+            , m_filepath.c_str());
+        DebugBreak();
         return false;
     }
 
@@ -260,8 +275,6 @@ bool ObjFile::load(const stl::string &path)
 
     // 以下 symbol 収集処理
     PIMAGE_FILE_HEADER pImageHeader = (PIMAGE_FILE_HEADER)ImageBase;
-    PIMAGE_OPTIONAL_HEADER *pOptionalHeader = (PIMAGE_OPTIONAL_HEADER*)(pImageHeader+1);
-
     PIMAGE_SECTION_HEADER pSectionHeader = (PIMAGE_SECTION_HEADER)(ImageBase + sizeof(IMAGE_FILE_HEADER) + pImageHeader->SizeOfOptionalHeader);
     PIMAGE_SYMBOL pSymbolTable = (PIMAGE_SYMBOL)((size_t)pImageHeader + pImageHeader->PointerToSymbolTable);
     DWORD SymbolCount = pImageHeader->NumberOfSymbols;
@@ -288,12 +301,10 @@ bool ObjFile::load(const stl::string &path)
 void ObjFile::link()
 {
     DWORD old_protect_flag;
-    ::VirtualProtect((LPVOID)m_data, m_datasize, PAGE_READWRITE, &old_protect_flag);
+    ::VirtualProtect((LPVOID)m_data, m_datasize, PAGE_EXECUTE_READWRITE, &old_protect_flag);
 
     size_t ImageBase = (size_t)(m_data);
     PIMAGE_FILE_HEADER pImageHeader = (PIMAGE_FILE_HEADER)ImageBase;
-    PIMAGE_OPTIONAL_HEADER *pOptionalHeader = (PIMAGE_OPTIONAL_HEADER*)(pImageHeader+1);
-
     PIMAGE_SECTION_HEADER pSectionHeader = (PIMAGE_SECTION_HEADER)(ImageBase + sizeof(IMAGE_FILE_HEADER) + pImageHeader->SizeOfOptionalHeader);
     PIMAGE_SYMBOL pSymbolTable = (PIMAGE_SYMBOL)((size_t)pImageHeader + pImageHeader->PointerToSymbolTable);
     DWORD SymbolCount = pImageHeader->NumberOfSymbols;
@@ -302,11 +313,9 @@ void ObjFile::link()
 
     for( size_t i=0; i < SymbolCount; ++i ) {
         PIMAGE_SYMBOL sym = pSymbolTable + i;
-        const char *name = GetSymbolName(StringTable, sym);
-
         if(sym->SectionNumber>0) {
             IMAGE_SECTION_HEADER &sect = pSectionHeader[sym->SectionNumber-1];
-            size_t SectionBase = (size_t)(ImageBase + sect.PointerToRawData + sym->Value);
+            size_t SectionBase = (size_t)(ImageBase + sect.PointerToRawData);
 
             DWORD NumRelocations = sect.NumberOfRelocations;
             PIMAGE_RELOCATION pRelocation = (PIMAGE_RELOCATION)(ImageBase + sect.PointerToRelocations);
@@ -337,8 +346,8 @@ void ObjFile::link()
         i += pSymbolTable[i].NumberOfAuxSymbols;
     }
 
-    // 安全のため書き込み禁止にしておく
-    ::VirtualProtect((LPVOID)m_data, m_datasize, PAGE_EXECUTE_READ, &old_protect_flag);
+    // global 変数が入ってる可能性があるのでフルアクセス可能にしておく必要がある
+    ::VirtualProtect((LPVOID)m_data, m_datasize, PAGE_EXECUTE_READWRITE, &old_protect_flag);
 }
 
 void* ObjFile::findSymbol(const char *name)
@@ -401,7 +410,7 @@ RELATION_CHECK_PASSED:;
     {
         ObjTable::iterator i = m_objs.find(path);
         if(i!=m_objs.end()) {
-            i->second->eachSymbol([&](const stl::string &name, void *data){ m_symbols.erase(name); });
+            i->second->eachSymbol([&](const stl::string &name, void*){ m_symbols.erase(name); });
             delete i->second;
             i->second = obj;
         }
@@ -434,7 +443,12 @@ void DynamicObjLoader::link()
     }
     // exe 側から参照されているシンボルを適切に張り替える
     for(SymbolLinkTable::iterator i=m_links.begin(); i!=m_links.end(); ++i) {
-        *i->second = findSymbol(i->first);
+        void *sym = findSymbol(i->first);
+        if(sym==NULL) {
+            istPrint("DOL error: 参照するシンボル %s を解決できませんでした。\n", i->first.c_str());
+            DebugBreak();
+        }
+        *i->second = sym;
     }
 
     // 新規ロードされているオブジェクトに OnLoad があれば呼ぶ
@@ -450,7 +464,7 @@ void DynamicObjLoader::unload( const stl::string &path )
     if(i!=m_objs.end()) {
         ObjFile *obj = i->second;
         CallOnUnloadHandler(obj);
-        obj->eachSymbol([&](const stl::string &name, void *data){ m_symbols.erase(name); });
+        obj->eachSymbol([&](const stl::string &name, void*){ m_symbols.erase(name); });
         delete obj;
         m_objs.erase(i);
     }
@@ -466,10 +480,17 @@ void DynamicObjLoader::unloadAll()
 
 void DynamicObjLoader::reloadAndLink()
 {
+    size_t n = 0;
     for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
-        load(i->first);
+        if(load(i->first)) {
+            istPrint("DOL info: reloading %s\n", i->first.c_str());
+            ++n;
+        }
     }
-    link();
+    if(n > 0) {
+        link();
+        istPrint("DOL info: link done.\n");
+    }
 }
 
 ObjFile* DynamicObjLoader::findObj( const stl::string &path )
@@ -538,7 +559,7 @@ public:
         HKEY key;
         LONG retKey = ::RegOpenKeyExA(HKEY_LOCAL_MACHINE, keyName.c_str(), 0, KEY_READ|KEY_WOW64_32KEY, &key);
         LONG retVal = ::RegQueryValueExA(key, VCVersion.c_str(), NULL, NULL, (LPBYTE)value, &size );
-        if( retVal==ERROR_SUCCESS  ) {
+        if( retKey==ERROR_SUCCESS && retVal==ERROR_SUCCESS  ) {
             m_msbuild += '"';
             m_msbuild += value;
             m_msbuild += "vcvarsall.bat";
@@ -572,6 +593,7 @@ public:
         if(create_console) {
             ::AllocConsole();
         }
+        istPrint("DOL info: starting recompile thread.\n");
         m_thread_watchfile = (HANDLE)_beginthread( threadWatchFile, 0, this );
     }
 
@@ -615,6 +637,7 @@ public:
 
     void execBuild()
     {
+        istPrint("DOL info: recompiling.\n");
         stl::string command = m_msbuild;
         command+=' ';
         command+=m_msbuild_option;

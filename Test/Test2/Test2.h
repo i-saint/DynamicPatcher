@@ -13,3 +13,4 @@ struct Particle
     float radius;
 };
 
+DOL_Fixate float GenRand();
