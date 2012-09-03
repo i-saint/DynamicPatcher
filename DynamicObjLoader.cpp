@@ -223,6 +223,7 @@ public:
 
 private:
     typedef stl::map<stl::string, void*> SymbolTable;
+    typedef stl::map<size_t, size_t> RelocBaseMap;
     void  *m_data;
     size_t m_datasize;
     void  *m_aligned_data;
@@ -230,6 +231,7 @@ private:
     FILETIME m_filetime;
     stl::string m_filepath;
     SymbolTable m_symbols;
+    RelocBaseMap m_reloc_bases;
     DynamicObjLoader *m_loader;
 };
 
@@ -383,8 +385,6 @@ bool ObjFile::link()
     DWORD SymbolCount = pImageHeader->NumberOfSymbols;
     PSTR StringTable = (PSTR)(pSymbolTable+SymbolCount);
 
-    typedef stl::map<size_t, size_t> RelocBaseMap;
-    RelocBaseMap reloc_base;
     for( size_t i=0; i < SymbolCount; ++i ) {
         PIMAGE_SYMBOL sym = pSymbolTable + i;
         //const char *sname = GetSymbolName(StringTable, sym);
@@ -423,8 +423,8 @@ bool ObjFile::link()
                 size_t addr = SectionBase + pReloc->VirtualAddress;
                 // 更新先に相対アドレスが入ってることがある。同じアドレスが複数ヶ所から参照されていることがあり、単純に加算するわけにはいかない。
                 // 面倒だが std::map を使う。初参照のアドレスであればここで相対アドレスが記憶される。
-                if(reloc_base.find(addr)==reloc_base.end()) {
-                    reloc_base[addr] = *(DWORD*)(addr);
+                if(m_reloc_bases.find(addr)==m_reloc_bases.end()) {
+                    m_reloc_bases[addr] = *(DWORD*)(addr);
                 }
 
                 // IMAGE_RELOCATION::Type に応じて再配置
@@ -434,12 +434,12 @@ bool ObjFile::link()
                 case IMAGE_REL32:
                     {
                         DWORD rel = (DWORD)(rdata - SectionBase - pReloc->VirtualAddress - 4);
-                        *(DWORD*)(addr) = (DWORD)(reloc_base[addr] + rel);
+                        *(DWORD*)(addr) = (DWORD)(m_reloc_bases[addr] + rel);
                     }
                     break;
                 case IMAGE_DIR32:
                     {
-                        *(DWORD*)(addr) = (DWORD)(reloc_base[addr] + rdata);
+                        *(DWORD*)(addr) = (DWORD)(m_reloc_bases[addr] + rdata);
                     }
                     break;
                 case IMAGE_DIR32NB:
