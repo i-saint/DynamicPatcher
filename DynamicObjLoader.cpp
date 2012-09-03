@@ -85,28 +85,47 @@ void GetExeModuleName(char *o_name)
     o_name[i] = 0;
 }
 
+// 位置指定版 VirtualAlloc()
+// location より後ろの最寄りの位置にメモリを確保する。
+void* VirtualAllocLocated(size_t size, void *location)
+{
+    static size_t base = (size_t)location;
+
+    // ドキュメントには、アドレス指定の VirtualAlloc() は指定先が既に予約されている場合最寄りの領域を返す、
+    // と書いてるように見えるが、実際には NULL が返ってくるようにしか見えない。
+    // なので成功するまでアドレスを進めつつリトライ…。
+    void *ret = NULL;
+    const size_t step = 0x10000; // 64kb
+    for(size_t i=0; ret==NULL; ++i) {
+        ret = ::VirtualAlloc((void*)((size_t)base+(step*i)), size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    }
+    return ret;
+}
+
+// exe がマップされている領域の後ろの最寄りの場所にメモリを確保する。
+// jmp 命令などの移動量は x64 でも 32bit なため、32bit に収まらない距離を飛ぼうとした場合あらぬところに着地して死ぬ。
+// そして new や malloc() だと 32bit に収まらない遥か彼方にメモリが確保されてしまうため、これが必要になる。
+// .exe がマップされている領域を調べ、その近くに VirtualAlloc() するという内容。
+void* VirtualAllocModule(size_t size)
+{
+    static void *exe_base = 0;
+    if(exe_base==0) {
+        char exefilename[MAX_PATH];
+        GetExeModuleName(exefilename);
+        exe_base = (void*)GetModuleHandleA(exefilename);
+    }
+    return VirtualAllocLocated(size, exe_base);
+}
+
 bool MapFile(const stl::string &path, void *&o_data, size_t &o_size)
 {
-    // jmp 命令などの移動量は x64 でも 32bit なため、32bit に収まらない距離を飛ぼうとした場合あらぬところに着地して死ぬ。
-    // new や malloc() だと 32bit に収まらない遥か彼方にメモリが確保されてしまうため、
-    // .exe がマップされている領域を調べ、その近くに .obj をマップする領域を VirtualAlloc() してやる必要がある。
-    char exefilename[MAX_PATH];
-    GetExeModuleName(exefilename);
-    size_t exe_base = (size_t)GetModuleHandleA(exefilename);
-
     o_data = NULL;
     o_size = 0;
     if(FILE *f=fopen(path.c_str(), "rb")) {
         fseek(f, 0, SEEK_END);
         o_size = ftell(f);
         if(o_size > 0) {
-            // ドキュメントには、アドレス指定の VirtualAlloc() は指定先が既に予約されている場合最寄りの領域を返す、
-            // と書いてるように見えるが、実際には NULL が返ってくるようにしか見えない。
-            // なので成功するまでアドレスを進めつつリトライ…。
-            const size_t step = 0x10000; // 64kb
-            for(size_t i=0; o_data==NULL; ++i) {
-                o_data = ::VirtualAlloc((void*)((size_t)exe_base+(step*i)), o_size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-            }
+            o_data = VirtualAllocModule(o_size);
             fseek(f, 0, SEEK_SET);
             fread(o_data, 1, o_size, f);
         }
@@ -115,6 +134,34 @@ bool MapFile(const stl::string &path, void *&o_data, size_t &o_size)
     }
     return false;
 }
+
+// アラインが必要な section データを再配置するための単純なアロケータ
+class SectionAllocator
+{
+public:
+    // data=NULL, size_t size=0xffffffff で初期化した場合、必要な容量を調べるのに使える
+    SectionAllocator(void *data=NULL, size_t size=0xffffffff) : m_data(data), m_size(size), m_used(0)
+    {}
+
+    void* allocate(size_t size, size_t align)
+    {
+        for(; m_used+size<m_size; ++m_used) {
+            if(m_used%align==0) {
+                size_t ret = m_data==NULL ? NULL : (size_t)m_data + m_used;
+                m_used += size;
+                return (void*)ret;
+            }
+        }
+        return NULL;
+    }
+
+    size_t getUsed() const { return m_used; }
+
+private:
+    void *m_data;
+    size_t m_size;
+    size_t m_used;
+};
 
 FILETIME GetFileModifiedTime(const stl::string &path)
 {
@@ -154,7 +201,8 @@ class DynamicObjLoader;
 class ObjFile
 {
 public:
-    ObjFile(DynamicObjLoader *loader) : m_loader(loader) {}
+    ObjFile(DynamicObjLoader *loader)
+        : m_data(NULL), m_datasize(0), m_aligned_data(NULL), m_aligned_datasize(0), m_loader(loader) {}
     ~ObjFile() { unload(); }
 
     bool load(const stl::string &path);
@@ -175,8 +223,10 @@ public:
 
 private:
     typedef stl::map<stl::string, void*> SymbolTable;
-    void *m_data;
+    void  *m_data;
     size_t m_datasize;
+    void  *m_aligned_data;
+    size_t m_aligned_datasize;
     FILETIME m_filetime;
     stl::string m_filepath;
     SymbolTable m_symbols;
@@ -232,9 +282,14 @@ private:
 void ObjFile::unload()
 {
     if(m_data!=NULL) {
-        ::VirtualFree(m_data, 0, MEM_RELEASE);
+        ::VirtualFree(m_data, m_datasize, MEM_RELEASE);
         m_data = NULL;
         m_datasize = 0;
+    }
+    if(m_aligned_data!=NULL) {
+        ::VirtualFree(m_aligned_data, m_aligned_datasize, MEM_RELEASE);
+        m_aligned_data = NULL;
+        m_aligned_datasize = 0;
     }
     m_filepath.clear();
     m_symbols.clear();
@@ -266,52 +321,50 @@ bool ObjFile::load(const stl::string &path)
         return false;
     }
 
-    // 以下 symbol 収集処理
     PIMAGE_FILE_HEADER pImageHeader = (PIMAGE_FILE_HEADER)ImageBase;
     PIMAGE_SECTION_HEADER pSectionHeader = (PIMAGE_SECTION_HEADER)(ImageBase + sizeof(IMAGE_FILE_HEADER) + pImageHeader->SizeOfOptionalHeader);
     PIMAGE_SYMBOL pSymbolTable = (PIMAGE_SYMBOL)((size_t)pImageHeader + pImageHeader->PointerToSymbolTable);
     DWORD SymbolCount = pImageHeader->NumberOfSymbols;
-
     PSTR StringTable = (PSTR)&pSymbolTable[SymbolCount];
 
+    // アラインが必要な section をアラインしつつ新しい領域に移す
+    m_aligned_data = NULL;
+    m_aligned_datasize = 0xffffffff;
+    for(size_t ti=0; ti<2; ++ti) {
+        // ti==0 で必要な容量を調べ、ti==1 で実際のメモリ確保と再配置を行う
+        SectionAllocator salloc(m_aligned_data, m_aligned_datasize);
+
+        for(size_t si=0; si<pImageHeader->NumberOfSections; ++si) {
+            IMAGE_SECTION_HEADER &sect = pSectionHeader[si];
+            // IMAGE_SECTION_HEADER::Characteristics にアライン情報が詰まっている
+            DWORD align = 1 << (((sect.Characteristics & 0x00f00000) >> 20) - 1);
+            if(align==1) {
+                // do nothing
+                continue;
+            }
+            else {
+                if(void *rd = salloc.allocate(sect.SizeOfRawData, align)) {
+                    memcpy(rd, (void*)(ImageBase + sect.PointerToRawData), sect.SizeOfRawData);
+                    sect.PointerToRawData = (DWORD)((size_t)rd - ImageBase);
+                }
+            }
+        }
+
+        if(ti==0) {
+            m_aligned_datasize = salloc.getUsed();
+            m_aligned_data = VirtualAllocLocated(m_aligned_datasize, m_data);
+        }
+    }
+
+    // symbol 収集処理
     for( size_t i=0; i < SymbolCount; ++i ) {
         PIMAGE_SYMBOL sym = pSymbolTable + i;
-        const char *name = GetSymbolName(StringTable, sym);
+        //const char *name = GetSymbolName(StringTable, sym);
         if(sym->SectionNumber>0) {
             IMAGE_SECTION_HEADER &sect = pSectionHeader[sym->SectionNumber-1];
-            void *data = (void*)(ImageBase + sect.PointerToRawData + sym->Value);
+            void *data = (void*)(ImageBase + sect.PointerToRawData);
             if(sym->SectionNumber==IMAGE_SYM_UNDEFINED) { continue; }
             const char *name = GetSymbolName(StringTable, sym);
-            DWORD align = sect.Characteristics & 0x00f00000;
-            if(     align==IMAGE_SCN_ALIGN_1BYTES!=0) {
-                // do nothing
-            }
-            else if(align==IMAGE_SCN_ALIGN_2BYTES!=0) {
-            }
-            else if(align==IMAGE_SCN_ALIGN_4BYTES!=0) {
-            }
-            else if(align==IMAGE_SCN_ALIGN_8BYTES!=0) {
-            }
-            else if(align==IMAGE_SCN_ALIGN_16BYTES!=0) {
-            }
-            else if(align==IMAGE_SCN_ALIGN_32BYTES!=0) {
-            }
-            else if(align==IMAGE_SCN_ALIGN_64BYTES!=0) {
-            }
-            else if(align==IMAGE_SCN_ALIGN_128BYTES!=0) {
-            }
-            else if(align==IMAGE_SCN_ALIGN_256BYTES!=0) {
-            }
-            else if(align==IMAGE_SCN_ALIGN_512BYTES!=0) {
-            }
-            else if(align==IMAGE_SCN_ALIGN_1024BYTES!=0) {
-            }
-            else if(align==IMAGE_SCN_ALIGN_2048BYTES!=0) {
-            }
-            else if(align==IMAGE_SCN_ALIGN_4096BYTES!=0) {
-            }
-            else if(align==IMAGE_SCN_ALIGN_8192BYTES!=0) {
-            }
             m_symbols[name] = data;
         }
         i += pSymbolTable[i].NumberOfAuxSymbols;
@@ -366,7 +419,8 @@ bool ObjFile::link()
         i += pSymbolTable[i].NumberOfAuxSymbols;
     }
 
-    // 安全のため↓のように write protect をかけたいところだが、global 変数を含む可能性があるのでフルアクセス可能にしておく必要がある
+    // 安全のため VirtualProtect() で write protect をかけたいところだが、
+    // const ではない global 変数を含む可能性があるのでフルアクセス可能にしておく必要がある。
     //::VirtualProtect((LPVOID)m_data, m_datasize, PAGE_EXECUTE_READ, &old_protect_flag);
     return true;
 }

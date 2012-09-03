@@ -46,7 +46,7 @@ DOL_Export void UpdateParticles(Particle *particles, size_t num_particles)
             float uradius = rradius + sp.radius;
             XMFLOAT3 diff = sp.position - rpos;
             float len = Len(diff);
-            if(len==0.0f) { continue; } // ©•ª©g‚Æ‚ÌÕ“Ë
+            if(len==0.0f) { continue; } // ©•ª©g‚Æ‚ÌÕ“Ë‚È‚Ì‚Å–³‹
             float d = len - uradius;
             if(d < 0.0f) {
                 XMFLOAT3 dir = diff / len;
