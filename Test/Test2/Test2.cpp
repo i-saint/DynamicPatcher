@@ -1,4 +1,4 @@
-#pragma warning( disable : 4996 ) // _s ‚¶‚á‚È‚¢ CRT ŠÖ”g‚¤‚Æo‚é‚â‚Â
+ï»¿#pragma warning( disable : 4996 ) // _s ã˜ã‚ƒãªã„ CRT é–¢æ•°ä½¿ã†ã¨å‡ºã‚‹ã‚„ã¤
 
 #include "Test2.h"
 

@@ -1,4 +1,4 @@
-#include "stdafx.h"
+ï»¿#include "stdafx.h"
 #include "Test2.h"
 #include <algorithm>
 
@@ -36,7 +36,7 @@ DOL_Export void InitializeParticles(Particle *particles, size_t num_particles)
 
 DOL_Export void UpdateParticles(Particle *particles, size_t num_particles)
 {
-    // ‘ŠŒİ‚É‰Ÿ‚µ•Ô‚µ
+    // ç›¸äº’ã«æŠ¼ã—è¿”ã—
     for(size_t ri=0; ri<num_particles; ++ri) {
         Particle &rp = particles[ri];
         XMFLOAT3 rpos = rp.position;
@@ -46,7 +46,7 @@ DOL_Export void UpdateParticles(Particle *particles, size_t num_particles)
             float uradius = rradius + sp.radius;
             XMFLOAT3 diff = sp.position - rpos;
             float len = Len(diff);
-            if(len==0.0f) { continue; } // ©•ª©g‚Æ‚ÌÕ“Ë‚È‚Ì‚Å–³‹
+            if(len==0.0f) { continue; } // è‡ªåˆ†è‡ªèº«ã¨ã®è¡çªãªã®ã§ç„¡è¦–
             float d = len - uradius;
             if(d < 0.0f) {
                 XMFLOAT3 dir = diff / len;
@@ -55,7 +55,7 @@ DOL_Export void UpdateParticles(Particle *particles, size_t num_particles)
         }
     }
 
-    // ’†S‚É‹z‚¢Šñ‚¹‚é
+    // ä¸­å¿ƒã«å¸ã„å¯„ã›ã‚‹
     {
         const XMFLOAT3 gravity_center = XMFLOAT3(0.0f, -3.0f, 0.0f);
         for(size_t ri=0; ri<num_particles; ++ri) {
@@ -65,7 +65,7 @@ DOL_Export void UpdateParticles(Particle *particles, size_t num_particles)
         }
     }
 
-    // °‚Æ‚ÌƒoƒEƒ“ƒh
+    // åºŠã¨ã®ãƒã‚¦ãƒ³ãƒ‰
     for(size_t ri=0; ri<num_particles; ++ri) {
         Particle &rp = particles[ri];
         rp.velocity.y -= 0.002f;
@@ -74,7 +74,7 @@ DOL_Export void UpdateParticles(Particle *particles, size_t num_particles)
         rp.velocity.y += std::min<float>(0.0f, d) * -0.2f;
     }
 
-    // ‘¬“x‚ğ“K—p
+    // é€Ÿåº¦ã‚’é©ç”¨
     for(size_t ri=0; ri<num_particles; ++ri) {
         Particle &rp = particles[ri];
         rp.position += rp.velocity;
