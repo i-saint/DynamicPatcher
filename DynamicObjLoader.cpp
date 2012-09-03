@@ -1,5 +1,5 @@
 ﻿#include "DynamicObjLoader.h"
-#ifndef DOL_Static_Link
+#ifndef DOL_StaticLink
 
 #include <windows.h>
 #include <imagehlp.h>
@@ -381,11 +381,13 @@ bool ObjFile::link()
     PIMAGE_SECTION_HEADER pSectionHeader = (PIMAGE_SECTION_HEADER)(ImageBase + sizeof(IMAGE_FILE_HEADER) + pImageHeader->SizeOfOptionalHeader);
     PIMAGE_SYMBOL pSymbolTable = (PIMAGE_SYMBOL)((size_t)pImageHeader + pImageHeader->PointerToSymbolTable);
     DWORD SymbolCount = pImageHeader->NumberOfSymbols;
-
     PSTR StringTable = (PSTR)(pSymbolTable+SymbolCount);
 
+    typedef stl::map<size_t, size_t> RelocBaseMap;
+    RelocBaseMap reloc_base;
     for( size_t i=0; i < SymbolCount; ++i ) {
         PIMAGE_SYMBOL sym = pSymbolTable + i;
+        //const char *sname = GetSymbolName(StringTable, sym);
         if(sym->SectionNumber>0) {
             IMAGE_SECTION_HEADER &sect = pSectionHeader[sym->SectionNumber-1];
             size_t SectionBase = (size_t)(ImageBase + sect.PointerToRawData);
@@ -402,17 +404,52 @@ bool ObjFile::link()
                     ::DebugBreak();
                     return false;
                 }
-                // 相対アドレス指定の場合相対アドレスに変換
+
+                enum {
 #ifdef _WIN64
-                if( pReloc->Type==IMAGE_REL_AMD64_REL32 ) {
+                    IMAGE_SECTION   = IMAGE_REL_AMD64_SECTION,
+                    IMAGE_SECREL    = IMAGE_REL_AMD64_SECREL,
+                    IMAGE_REL32     = IMAGE_REL_AMD64_REL32,
+                    IMAGE_DIR32     = IMAGE_REL_AMD64_ADDR32,
+                    IMAGE_DIR32NB   = IMAGE_REL_AMD64_ADDR32NB,
 #else
-                if( pReloc->Type==IMAGE_REL_I386_REL32 ) {
+                    IMAGE_SECTION   = IMAGE_REL_I386_SECTION,
+                    IMAGE_SECREL    = IMAGE_REL_I386_SECREL,
+                    IMAGE_REL32     = IMAGE_REL_I386_REL32,
+                    IMAGE_DIR32     = IMAGE_REL_I386_DIR32,
+                    IMAGE_DIR32NB   = IMAGE_REL_I386_DIR32NB,
 #endif
-                    DWORD rel = (DWORD)(rdata - SectionBase - pReloc->VirtualAddress - 4);
-                    *(DWORD*)(SectionBase + pReloc->VirtualAddress) = rel;
+                };
+                size_t addr = SectionBase + pReloc->VirtualAddress;
+                // 更新先に相対アドレスが入ってることがある。同じアドレスが複数ヶ所から参照されていることがあり、単純に加算するわけにはいかない。
+                // 面倒だが std::map を使う。初参照のアドレスであればここで相対アドレスが記憶される。
+                if(reloc_base.find(addr)==reloc_base.end()) {
+                    reloc_base[addr] = *(DWORD*)(addr);
                 }
-                else {
-                    *(size_t*)(SectionBase + pReloc->VirtualAddress) = rdata;
+
+                // IMAGE_RELOCATION::Type に応じて再配置
+                switch(pReloc->Type) {
+                case IMAGE_SECTION: break; // 
+                case IMAGE_SECREL:  break; // デバッグ情報にしか出てこない (はず)
+                case IMAGE_REL32:
+                    {
+                        DWORD rel = (DWORD)(rdata - SectionBase - pReloc->VirtualAddress - 4);
+                        *(DWORD*)(addr) = (DWORD)(reloc_base[addr] + rel);
+                    }
+                    break;
+                case IMAGE_DIR32:
+                    {
+                        *(DWORD*)(addr) = (DWORD)(reloc_base[addr] + rdata);
+                    }
+                    break;
+                case IMAGE_DIR32NB:
+                    {
+                        *(DWORD*)(addr) = (DWORD)rdata;
+                    }
+                    break;
+                default:
+                    istPrint("DOL warning: 未知の IMAGE_RELOCATION::Type 0x%x\n", pReloc->Type);
+                    break;
                 }
             }
         }
@@ -839,4 +876,4 @@ void DOL_AddSourceDirectory(const char *path)
 };
 
 
-#endif // DOL_Static_Link
+#endif // DOL_StaticLink

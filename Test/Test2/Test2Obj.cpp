@@ -29,8 +29,8 @@ DOL_Export void InitializeParticles(Particle *particles, size_t num_particles)
 {
     for(size_t i=0; i<num_particles; ++i) {
         particles[i].position = XMFLOAT3(GenRand()*3.0f, GenRand()*3.0f, GenRand()*3.0f);
-        particles[i].radius = 0.05f;
         particles[i].velocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
+        particles[i].radius = 0.05f;
     }
 }
 
@@ -57,11 +57,11 @@ DOL_Export void UpdateParticles(Particle *particles, size_t num_particles)
 
     // 中心に吸い寄せる
     {
-        const XMFLOAT3 gravity_center = XMFLOAT3(0.0f, -3.0f, 0.0f);
+        const XMFLOAT3 gravity_center = XMFLOAT3(0.0f, 1.0f, 0.0f);
         for(size_t ri=0; ri<num_particles; ++ri) {
             Particle &rp = particles[ri];
             XMFLOAT3 dir = Normalize(gravity_center - rp.position);
-            rp.velocity += dir * 0.001f;
+            rp.velocity += dir * 0.0022f;
         }
     }
 
@@ -82,6 +82,8 @@ DOL_Export void UpdateParticles(Particle *particles, size_t num_particles)
     }
 }
 
-DOL_OnLoad(
-    //InitializeParticles(g_particles, MAX_PARTICLES);
-)
+DOL_OnLoad({
+    //Particle *particles = g_particles;
+    //size_t num_particles = MAX_PARTICLES;
+    //InitializeParticles(particles, num_particles);
+})

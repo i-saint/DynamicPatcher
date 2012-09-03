@@ -1,6 +1,6 @@
 ﻿// .obj ファイルを実行時にロード＆リンクして実行可能にします。
 // 具体的な使い方はテストを参照。
-// DOL_Static_Link を define すると全て通常通り static link されるので、
+// DOL_StaticLink を define すると全て通常通り static link されるので、
 // 開発用ビルド構成でのみ .obj ロードを使う、という使い方が可能です。
 // 
 // ロードされる .obj には以下のような制限があります。
@@ -29,12 +29,12 @@
 
 
 // 一応非 Windows でもビルドエラーにはならないようにしておく
-#if !defined(_WIN32) && !defined(DOL_Static_Link)
-#   define DOL_Static_Link
+#if !defined(_WIN32) && !defined(DOL_StaticLink)
+#   define DOL_StaticLink
 #endif
 
 
-#ifndef DOL_Static_Link
+#ifndef DOL_StaticLink
 
 #ifdef _WIN64
 #   define DOL_Symbol_Prefix
@@ -136,7 +136,7 @@ public:
 };
 
 
-#else // DOL_Static_Link
+#else // DOL_StaticLink
 
 
 #define DOL_Export
@@ -159,6 +159,6 @@ public:
 #define DOL_AddSourceDirectory(...)
 
 
-#endif // DOL_Static_Link
+#endif // DOL_StaticLink
 
 #endif // __DynamicObjLoader_h__
