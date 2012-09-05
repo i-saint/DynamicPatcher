@@ -89,6 +89,7 @@ void GetExeModuleName(char *o_name)
 // location より後ろの最寄りの位置にメモリを確保する。
 void* VirtualAllocLocated(size_t size, void *location)
 {
+    if(size==0) { return NULL; }
     static size_t base = (size_t)location;
 
     // ドキュメントには、アドレス指定の VirtualAlloc() は指定先が既に予約されている場合最寄りの領域を返す、
@@ -143,14 +144,15 @@ public:
     SectionAllocator(void *data=NULL, size_t size=0xffffffff) : m_data(data), m_size(size), m_used(0)
     {}
 
+    // align: 2 の n 乗である必要がある
     void* allocate(size_t size, size_t align)
     {
-        for(; m_used+size<m_size; ++m_used) {
-            if(m_used%align==0) {
-                size_t ret = m_data==NULL ? NULL : (size_t)m_data + m_used;
-                m_used += size;
-                return (void*)ret;
-            }
+        size_t base = (size_t)m_data;
+        size_t mask = align - 1;
+        size_t aligned = (base + m_used + mask) & ~mask;
+        if(aligned+size <= base+m_size) {
+            m_used = (aligned+size) - base;
+            return m_data==NULL ? NULL : (void*)aligned;
         }
         return NULL;
     }
