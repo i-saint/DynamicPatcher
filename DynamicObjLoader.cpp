@@ -210,7 +210,7 @@ public:
     bool load(const stl::string &path);
     void unload();
     bool link();
-    void* findSymbol(const char *name);
+    void* findSymbol(const stl::string &name);
 
     // f: functor [](const stl::string &symbol_name, const void *data)
     template<class F>
@@ -255,7 +255,7 @@ public:
     void* findSymbol(const stl::string &name);
 
     // exe 側 obj 側問わずシンボルを探す。link 処理用
-    void* resolveExternalSymbol(const stl::string &name);
+    void* resolveExternalSymbol(ObjFile *from, const stl::string &name);
 
     // シンボル name が .obj リロードなどで更新された場合、target も自動的に更新する
     void addSymbolLink(const stl::string &name, void *&target);
@@ -402,7 +402,7 @@ bool ObjFile::link()
                 PIMAGE_RELOCATION pReloc = pRelocation + ri;
                 PIMAGE_SYMBOL rsym = pSymbolTable + pReloc->SymbolTableIndex;
                 const char *rname = GetSymbolName(StringTable, rsym);
-                size_t rdata = (size_t)m_loader->resolveExternalSymbol(rname);
+                size_t rdata = (size_t)m_loader->resolveExternalSymbol(this, rname);
                 if(rdata==NULL) {
                     istPrint("DOL fatal: %s が参照するシンボル %s を解決できませんでした。\n", m_filepath.c_str(), rname);
                     ::DebugBreak();
@@ -466,7 +466,7 @@ bool ObjFile::link()
     return true;
 }
 
-void* ObjFile::findSymbol(const char *name)
+void* ObjFile::findSymbol(const stl::string &name)
 {
     SymbolTable::iterator i = m_symbols.find(name);
     if(i == m_symbols.end()) { return NULL; }
@@ -621,9 +621,10 @@ void* DynamicObjLoader::findSymbol( const stl::string &name )
     return i->second;
 }
 
-void* DynamicObjLoader::resolveExternalSymbol( const stl::string &name )
+void* DynamicObjLoader::resolveExternalSymbol( ObjFile *obj, const stl::string &name )
 {
-    void *sym = findSymbol(name);
+    void *sym = obj->findSymbol(name);
+    if(sym==NULL) { sym=findSymbol(name); }
     if(sym==NULL) { sym=FindSymbolInExe(name.c_str()); }
     return sym;
 }
