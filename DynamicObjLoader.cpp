@@ -368,7 +368,7 @@ bool ObjFile::load(const stl::string &path)
         //const char *name = GetSymbolName(StringTable, sym);
         if(sym->SectionNumber>0) {
             IMAGE_SECTION_HEADER &sect = pSectionHeader[sym->SectionNumber-1];
-            void *data = (void*)(ImageBase + sect.PointerToRawData);
+            void *data = (void*)(ImageBase + sect.PointerToRawData + sym->Value);
             if(sym->SectionNumber==IMAGE_SYM_UNDEFINED) { continue; }
             const char *name = GetSymbolName(StringTable, sym);
             m_symbols[name] = data;
@@ -609,7 +609,7 @@ void DynamicObjLoader::update()
 {
     size_t n = 0;
     for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
-        if(load(i->first)) { ++n; }
+        if(load(i->first, true)) { ++n; }
     }
     if(n > 0) { link(); }
 }
