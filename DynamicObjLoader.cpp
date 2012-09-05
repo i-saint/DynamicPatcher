@@ -244,7 +244,7 @@ public:
     DynamicObjLoader();
     ~DynamicObjLoader();
 
-    bool load(const stl::string &path);
+    bool load(const stl::string &path, bool dont_ignore=false);
     void unload(ObjFile *obj);
     void unload(const stl::string &path);
     void unloadAll();
@@ -348,7 +348,9 @@ bool ObjFile::load(const stl::string &path)
             }
             else {
                 if(void *rd = salloc.allocate(sect.SizeOfRawData, align)) {
-                    memcpy(rd, (void*)(ImageBase + sect.PointerToRawData), sect.SizeOfRawData);
+                    if(sect.PointerToRawData != 0) {
+                        memcpy(rd, (void*)(ImageBase + sect.PointerToRawData), sect.SizeOfRawData);
+                    }
                     sect.PointerToRawData = (DWORD)((size_t)rd - ImageBase);
                 }
             }
@@ -484,7 +486,7 @@ DynamicObjLoader::~DynamicObjLoader()
     unloadAll();
 }
 
-bool DynamicObjLoader::load( const stl::string &path )
+bool DynamicObjLoader::load( const stl::string &path, bool dont_ignore )
 {
     // 同名ファイルが読み込み済み && 前回からファイルの更新時刻変わってない ならばなにもしない
     {
@@ -502,14 +504,15 @@ bool DynamicObjLoader::load( const stl::string &path )
         delete obj;
         return false;
     }
-
-    // DOL_Module がない obj は無視
-    // .exe を構成する普通の .obj をロードすると、他の .obj がそちらを参照して問題を起こす可能性があるため
-    if(obj->findSymbol(g_symname_modulemarker)==NULL) {
-        unload(path);
-        m_objs.erase(path);
-        delete obj;
-        return false;
+    if(!dont_ignore) {
+        // DOL_Module がない obj は無視
+        // .exe を構成する普通の .obj をロードすると、他の .obj がそちらを参照して問題を起こす可能性があるため
+        if(obj->findSymbol(g_symname_modulemarker)==NULL) {
+            unload(path);
+            m_objs.erase(path);
+            delete obj;
+            return false;
+        }
     }
 
     {
@@ -835,7 +838,7 @@ void  DOL_Load(const char *path)
         }
     }
     else {
-        g_objloader->load(path);
+        g_objloader->load(path, true);
     }
 }
 
