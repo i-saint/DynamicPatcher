@@ -389,75 +389,70 @@ bool ObjFile::link()
     DWORD SymbolCount = pImageHeader->NumberOfSymbols;
     PSTR StringTable = (PSTR)(pSymbolTable+SymbolCount);
 
-    for( size_t i=0; i < SymbolCount; ++i ) {
-        PIMAGE_SYMBOL sym = pSymbolTable + i;
-        //const char *sname = GetSymbolName(StringTable, sym);
-        if(sym->SectionNumber>0) {
-            IMAGE_SECTION_HEADER &sect = pSectionHeader[sym->SectionNumber-1];
-            size_t SectionBase = (size_t)(ImageBase + sect.PointerToRawData);
+    for(size_t si=0; si<pImageHeader->NumberOfSections; ++si) {
+        IMAGE_SECTION_HEADER &sect = pSectionHeader[si];
+        size_t SectionBase = (size_t)(ImageBase + sect.PointerToRawData);
 
-            DWORD NumRelocations = sect.NumberOfRelocations;
-            PIMAGE_RELOCATION pRelocation = (PIMAGE_RELOCATION)(ImageBase + sect.PointerToRelocations);
-            for(size_t ri=0; ri<NumRelocations; ++ri) {
-                PIMAGE_RELOCATION pReloc = pRelocation + ri;
-                PIMAGE_SYMBOL rsym = pSymbolTable + pReloc->SymbolTableIndex;
-                const char *rname = GetSymbolName(StringTable, rsym);
-                size_t rdata = (size_t)m_loader->resolveExternalSymbol(this, rname);
-                if(rdata==NULL) {
-                    istPrint("DOL fatal: %s が参照するシンボル %s を解決できませんでした。\n", m_filepath.c_str(), rname);
-                    ::DebugBreak();
-                    return false;
-                }
+        DWORD NumRelocations = sect.NumberOfRelocations;
+        PIMAGE_RELOCATION pRelocation = (PIMAGE_RELOCATION)(ImageBase + sect.PointerToRelocations);
+        for(size_t ri=0; ri<NumRelocations; ++ri) {
+            PIMAGE_RELOCATION pReloc = pRelocation + ri;
+            PIMAGE_SYMBOL rsym = pSymbolTable + pReloc->SymbolTableIndex;
+            const char *rname = GetSymbolName(StringTable, rsym);
+            size_t rdata = (size_t)m_loader->resolveExternalSymbol(this, rname);
+            if(rdata==NULL) {
+                istPrint("DOL fatal: %s が参照するシンボル %s を解決できませんでした。\n", m_filepath.c_str(), rname);
+                ::DebugBreak();
+                return false;
+            }
 
-                enum {
+            enum {
 #ifdef _WIN64
-                    IMAGE_SECTION   = IMAGE_REL_AMD64_SECTION,
-                    IMAGE_SECREL    = IMAGE_REL_AMD64_SECREL,
-                    IMAGE_REL32     = IMAGE_REL_AMD64_REL32,
-                    IMAGE_DIR32     = IMAGE_REL_AMD64_ADDR32,
-                    IMAGE_DIR32NB   = IMAGE_REL_AMD64_ADDR32NB,
+                IMAGE_SECTION   = IMAGE_REL_AMD64_SECTION,
+                IMAGE_SECREL    = IMAGE_REL_AMD64_SECREL,
+                IMAGE_REL32     = IMAGE_REL_AMD64_REL32,
+                IMAGE_DIR32     = IMAGE_REL_AMD64_ADDR32,
+                IMAGE_DIR32NB   = IMAGE_REL_AMD64_ADDR32NB,
 #else
-                    IMAGE_SECTION   = IMAGE_REL_I386_SECTION,
-                    IMAGE_SECREL    = IMAGE_REL_I386_SECREL,
-                    IMAGE_REL32     = IMAGE_REL_I386_REL32,
-                    IMAGE_DIR32     = IMAGE_REL_I386_DIR32,
-                    IMAGE_DIR32NB   = IMAGE_REL_I386_DIR32NB,
+                IMAGE_SECTION   = IMAGE_REL_I386_SECTION,
+                IMAGE_SECREL    = IMAGE_REL_I386_SECREL,
+                IMAGE_REL32     = IMAGE_REL_I386_REL32,
+                IMAGE_DIR32     = IMAGE_REL_I386_DIR32,
+                IMAGE_DIR32NB   = IMAGE_REL_I386_DIR32NB,
 #endif
-                };
-                size_t addr = SectionBase + pReloc->VirtualAddress;
-                // 更新先に相対アドレスが入ってることがある。同じアドレスが複数ヶ所から参照されていることがあり、単純に加算するわけにはいかない。
-                // 面倒だが std::map を使う。初参照のアドレスであればここで相対アドレスが記憶される。
-                if(m_reloc_bases.find(addr)==m_reloc_bases.end()) {
-                    m_reloc_bases[addr] = *(DWORD*)(addr);
-                }
+            };
+            size_t addr = SectionBase + pReloc->VirtualAddress;
+            // 更新先に相対アドレスが入ってることがある。リンクだけ再度行われることがあるため、単純に加算するわけにはいかない。
+            // 面倒だが std::map を使う。初参照のアドレスであればここで相対アドレスが記憶される。
+            if(m_reloc_bases.find(addr)==m_reloc_bases.end()) {
+                m_reloc_bases[addr] = *(DWORD*)(addr);
+            }
 
-                // IMAGE_RELOCATION::Type に応じて再配置
-                switch(pReloc->Type) {
-                case IMAGE_SECTION: break; // 
-                case IMAGE_SECREL:  break; // デバッグ情報にしか出てこない (はず)
-                case IMAGE_REL32:
-                    {
-                        DWORD rel = (DWORD)(rdata - SectionBase - pReloc->VirtualAddress - 4);
-                        *(DWORD*)(addr) = (DWORD)(m_reloc_bases[addr] + rel);
-                    }
-                    break;
-                case IMAGE_DIR32:
-                    {
-                        *(DWORD*)(addr) = (DWORD)(m_reloc_bases[addr] + rdata);
-                    }
-                    break;
-                case IMAGE_DIR32NB:
-                    {
-                        *(DWORD*)(addr) = (DWORD)rdata;
-                    }
-                    break;
-                default:
-                    istPrint("DOL warning: 未知の IMAGE_RELOCATION::Type 0x%x\n", pReloc->Type);
-                    break;
+            // IMAGE_RELOCATION::Type に応じて再配置
+            switch(pReloc->Type) {
+            case IMAGE_SECTION: break; // 
+            case IMAGE_SECREL:  break; // デバッグ情報にしか出てこない (はず)
+            case IMAGE_REL32:
+                {
+                    DWORD rel = (DWORD)(rdata - SectionBase - pReloc->VirtualAddress - 4);
+                    *(DWORD*)(addr) = (DWORD)(m_reloc_bases[addr] + rel);
                 }
+                break;
+            case IMAGE_DIR32:
+                {
+                    *(DWORD*)(addr) = (DWORD)(m_reloc_bases[addr] + rdata);
+                }
+                break;
+            case IMAGE_DIR32NB:
+                {
+                    *(DWORD*)(addr) = (DWORD)rdata;
+                }
+                break;
+            default:
+                istPrint("DOL warning: 未知の IMAGE_RELOCATION::Type 0x%x\n", pReloc->Type);
+                break;
             }
         }
-        i += pSymbolTable[i].NumberOfAuxSymbols;
     }
 
     // 安全のため VirtualProtect() で write protect をかけたいところだが、
