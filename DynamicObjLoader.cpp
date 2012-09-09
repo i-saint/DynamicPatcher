@@ -394,8 +394,15 @@ bool ObjFile::link()
         size_t SectionBase = (size_t)(ImageBase + sect.PointerToRawData);
 
         DWORD NumRelocations = sect.NumberOfRelocations;
+        DWORD FirstRelocation = 0;
+        // NumberOfRelocations==0xffff の場合、最初の IMAGE_RELOCATION に実際の値が入っている。(NumberOfRelocations は 16bit のため)
+        if(sect.NumberOfRelocations==0xffff && (sect.Characteristics&IMAGE_SCN_LNK_NRELOC_OVFL)!=0) {
+            NumRelocations = ((PIMAGE_RELOCATION)(ImageBase + sect.PointerToRelocations))[0].RelocCount;
+            FirstRelocation = 1;
+        }
+
         PIMAGE_RELOCATION pRelocation = (PIMAGE_RELOCATION)(ImageBase + sect.PointerToRelocations);
-        for(size_t ri=0; ri<NumRelocations; ++ri) {
+        for(size_t ri=FirstRelocation; ri<NumRelocations; ++ri) {
             PIMAGE_RELOCATION pReloc = pRelocation + ri;
             PIMAGE_SYMBOL rsym = pSymbolTable + pReloc->SymbolTableIndex;
             const char *rname = GetSymbolName(StringTable, rsym);
@@ -759,6 +766,7 @@ public:
         si.cb = sizeof(si);
         if(::CreateProcessA(NULL, (LPSTR)command.c_str(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)==TRUE) {
             ::WaitForSingleObject(pi.hProcess, INFINITE);
+            ::Sleep(1000); // 終了直後だとファイルの書き込みが終わってないことがあるっぽい？ので少し待つ…
             m_build_has_just_completed = true;
         }
         istPrint("DOL info: recompile end\n");
