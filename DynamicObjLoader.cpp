@@ -485,7 +485,7 @@ void* ObjFile::findSymbol(const stl::string &name)
 }
 
 
-typedef void (*Handler)();
+typedef void (**Handler)();
 
 
 DynamicObjLoader::DynamicObjLoader()
@@ -545,8 +545,8 @@ bool DynamicObjLoader::load( const stl::string &path, bool dont_ignore )
     return true;
 }
 
-inline void CallOnLoadHandler(ObjFile *obj)   { if(Handler h=(Handler)obj->findSymbol(g_symname_onload))   { h(); } }
-inline void CallOnUnloadHandler(ObjFile *obj) { if(Handler h=(Handler)obj->findSymbol(g_symname_onunload)) { h(); } }
+inline void CallOnLoadHandler(ObjFile *obj)   { if(Handler h=(Handler)obj->findSymbol(g_symname_onload))   { (*h)(); } }
+inline void CallOnUnloadHandler(ObjFile *obj) { if(Handler h=(Handler)obj->findSymbol(g_symname_onunload)) { (*h)(); } }
 
 void DynamicObjLoader::unload(ObjFile *obj)
 {
