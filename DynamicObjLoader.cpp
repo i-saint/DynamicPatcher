@@ -17,6 +17,7 @@
 namespace dol {
 
 namespace stl = std;
+typedef unsigned __int64 QWORD, *PQWORD;
 
 const char g_symname_modulemarker[] = DOL_Symbol_Prefix "DOL_ModuleMarker";
 const char g_symname_onload[]       = DOL_Symbol_Prefix "DOL_OnLoadHandler";
@@ -420,6 +421,7 @@ bool ObjFile::link()
                 IMAGE_REL32     = IMAGE_REL_AMD64_REL32,
                 IMAGE_DIR32     = IMAGE_REL_AMD64_ADDR32,
                 IMAGE_DIR32NB   = IMAGE_REL_AMD64_ADDR32NB,
+                IMAGE_DIR64     = IMAGE_REL_AMD64_ADDR64,
 #else
                 IMAGE_SECTION   = IMAGE_REL_I386_SECTION,
                 IMAGE_SECREL    = IMAGE_REL_I386_SECREL,
@@ -455,6 +457,13 @@ bool ObjFile::link()
                     *(DWORD*)(addr) = (DWORD)rdata;
                 }
                 break;
+#ifdef _WIN64
+            case IMAGE_DIR64:
+                {
+                    *(QWORD*)(addr) = (QWORD)(m_reloc_bases[addr] + rdata);
+                }
+                break;
+#endif // _WIN64
             default:
                 istPrint("DOL warning: 未知の IMAGE_RELOCATION::Type 0x%x\n", pReloc->Type);
                 break;

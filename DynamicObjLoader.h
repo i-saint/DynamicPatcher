@@ -58,7 +58,7 @@
 
 // obj 側で使います。
 // 動的にロードされる .obj だと明示します。これを書いておかないと DOL_Load() でロードできません。
-#define DOL_Module          DOL_Export void DOL_ModuleMarker() {}
+#define DOL_Module          DOL_Export __declspec(selectany) int DOL_ModuleMarker=0;
 
 // obj 側で使います。引数には処理内容を書きます。このブロックはロード時に自動的に実行されます。
 // DOL_OnUnload() と併せて、serialize/deserialize などに用います。
