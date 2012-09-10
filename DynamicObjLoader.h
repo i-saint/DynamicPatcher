@@ -45,8 +45,6 @@
 #if defined(_CPPRTTI) && !defined(DOL_DisableWarning_RTTI)
 #   pragma message("DOL warning: RTTI が有効なため .obj 側の virtual 関数を正常に呼べません。この警告を無効にするには DOL_DisableWarning_RTTI を define します。\n")
 #endif // _CPPRTTI
-#define DOL_CONCAT_(a, b) a##b
-#define DOL_CONCAT(a, b)  DOL_CONCAT_(a,b)
 
 
 // obj 側で使います。親 process から参照されるシンボルにつけます。(mangling 問題解決のため)
@@ -59,15 +57,15 @@
 #define DOL_Fixate  __declspec(dllexport)
 
 // obj 側で使います。
-// 動的にロードされる .obj だと明示します。これを書いておかないと DOL_Load() でロードできません。
+// 動的にロードされる .obj だと明示します。DOL_Load() でディレクトリ指定した場合、これが定義されている .obj モジュールをディレクトリから探してロードします。
 #define DOL_Module          DOL_Export __declspec(selectany) int DOL_ModuleMarker=0;
 
 // obj 側で使います。引数には処理内容を書きます。このブロックはロード時に自動的に実行されます。
 // DOL_OnUnload() と併せて、serialize/deserialize などに用います。
-#define DOL_OnLoad(...)     void DOL_CONCAT(_DOL_OnLoadHandler, __LINE__)()   { __VA_ARGS__ }; DOL_Export __declspec(selectany) void (*DOL_OnLoadHandler)() = DOL_CONCAT(_DOL_OnLoadHandler, __LINE__);
+#define DOL_OnLoad(...)     DOL_Export static void DOL_OnLoadHandler()   { __VA_ARGS__ }; __declspec(selectany) void *_DOL_OnLoadHandler=DOL_OnLoadHandler;
 
 // obj 側で使います。引数には処理内容を書きます。このブロックはアンロード時に自動的に実行されます。
-#define DOL_OnUnload(...)   void DOL_CONCAT(_DOL_OnUnloadHandler, __LINE__)() { __VA_ARGS__ }; DOL_Export __declspec(selectany) void (*DOL_OnUnloadHandler)() = DOL_CONCAT(_DOL_OnUnloadHandler, __LINE__);
+#define DOL_OnUnload(...)   DOL_Export static void DOL_OnUnloadHandler() { __VA_ARGS__ }; __declspec(selectany) void *_DOL_OnUnloadHandler=DOL_OnUnloadHandler;
 
 // exe 側で使います。obj から import する関数/変数を宣言します。
 // obj から import してくるものは exe 側では実際にはポインタなので、複数 cpp に定義があるとリンクエラーになってしまいます。
