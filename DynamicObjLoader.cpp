@@ -3,11 +3,12 @@
 
 #include <windows.h>
 #include <imagehlp.h>
+#include <process.h>
 #include <cstdio>
 #include <vector>
 #include <string>
 #include <map>
-#include <process.h>
+#include <algorithm>
 #pragma comment(lib, "imagehlp.lib")
 #pragma warning(disable: 4996) // _s じゃない CRT 関数使うとでるやつ
 
@@ -110,8 +111,8 @@ void* VirtualAllocLocated(size_t size, void *location)
 // .exe がマップされている領域を調べ、その近くに VirtualAlloc() するという内容。
 void* VirtualAllocModule(size_t size)
 {
-    static void *exe_base = 0;
-    if(exe_base==0) {
+    static void *exe_base = NULL;
+    if(exe_base==NULL) {
         char exefilename[MAX_PATH];
         GetExeModuleName(exefilename);
         exe_base = (void*)GetModuleHandleA(exefilename);
@@ -119,7 +120,8 @@ void* VirtualAllocModule(size_t size)
     return VirtualAllocLocated(size, exe_base);
 }
 
-bool MapFile(const stl::string &path, void *&o_data, size_t &o_size)
+typedef void *(AllocFunc)(size_t size);
+bool MapFile(const stl::string &path, void *&o_data, size_t &o_size, AllocFunc alloc=VirtualAllocModule)
 {
     o_data = NULL;
     o_size = 0;
@@ -127,7 +129,7 @@ bool MapFile(const stl::string &path, void *&o_data, size_t &o_size)
         fseek(f, 0, SEEK_END);
         o_size = ftell(f);
         if(o_size > 0) {
-            o_data = VirtualAllocModule(o_size);
+            o_data = alloc(o_size);
             fseek(f, 0, SEEK_SET);
             fread(o_data, 1, o_size, f);
         }
@@ -166,13 +168,17 @@ private:
     size_t m_used;
 };
 
-FILETIME GetFileModifiedTime(const stl::string &path)
+QWORD GetFileModifiedTime(const stl::string &path)
 {
-    FILETIME writetime = {0,0};
+    union RetT
+    {
+        FILETIME filetime;
+        QWORD qword;
+    } ret;
     HANDLE h = ::CreateFileA(path.c_str(), 0, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    ::GetFileTime(h, NULL, NULL, &writetime);
+    ::GetFileTime(h, NULL, NULL, &ret.filetime);
     ::CloseHandle(h);
-    return writetime;
+    return ret.qword;
 }
 inline bool operator==(const FILETIME &l, const FILETIME &r)
 {
@@ -205,10 +211,11 @@ class ObjFile
 {
 public:
     ObjFile(DynamicObjLoader *loader)
-        : m_data(NULL), m_datasize(0), m_aligned_data(NULL), m_aligned_datasize(0), m_loader(loader) {}
+        : m_data(NULL), m_size(0), m_aligned_data(NULL), m_aligned_datasize(0), m_loader(loader) {}
     ~ObjFile() { unload(); }
 
     bool load(const stl::string &path);
+    bool load(const stl::string &name, void *data, size_t datasize, QWORD filetime);
     void unload();
     bool link();
     void* findSymbol(const stl::string &name);
@@ -222,17 +229,17 @@ public:
         }
     }
 
-    FILETIME getFileTime() const { return m_filetime; }
+    QWORD getFileTime() const { return m_time; }
 
 private:
     typedef stl::map<stl::string, void*> SymbolTable;
     typedef stl::map<size_t, size_t> RelocBaseMap;
     void  *m_data;
-    size_t m_datasize;
+    size_t m_size;
     void  *m_aligned_data;
     size_t m_aligned_datasize;
-    FILETIME m_filetime;
-    stl::string m_filepath;
+    QWORD m_time;
+    stl::string m_name;
     SymbolTable m_symbols;
     RelocBaseMap m_reloc_bases;
     DynamicObjLoader *m_loader;
@@ -245,7 +252,10 @@ public:
     DynamicObjLoader();
     ~DynamicObjLoader();
 
-    bool load(const stl::string &path, bool dont_ignore=false);
+    bool needsReload(const stl::string &name, QWORD time);
+    bool loadObj(const stl::string &path, bool force=false);
+    void loadObj(const stl::string &name, ObjFile *obj);
+    bool loadLib(const stl::string &path);
     void unload(ObjFile *obj);
     void unload(const stl::string &path);
     void unloadAll();
@@ -287,16 +297,16 @@ private:
 void ObjFile::unload()
 {
     if(m_data!=NULL) {
-        ::VirtualFree(m_data, m_datasize, MEM_RELEASE);
+        ::VirtualFree(m_data, m_size, MEM_RELEASE);
         m_data = NULL;
-        m_datasize = 0;
+        m_size = 0;
     }
     if(m_aligned_data!=NULL) {
         ::VirtualFree(m_aligned_data, m_aligned_datasize, MEM_RELEASE);
         m_aligned_data = NULL;
         m_aligned_datasize = 0;
     }
-    m_filepath.clear();
+    m_name.clear();
     m_symbols.clear();
 }
 
@@ -307,11 +317,21 @@ inline const char* GetSymbolName(PSTR StringTable, PIMAGE_SYMBOL Sym)
 
 bool ObjFile::load(const stl::string &path)
 {
-    m_filepath = path;
-    if(!MapFile(path, m_data, m_datasize)) {
+    void *data;
+    size_t size;
+    if(!MapFile(path, data, size)) {
         return false;
     }
-    m_filetime = GetFileModifiedTime(path);
+    QWORD time = GetFileModifiedTime(path);
+    return load(path, data, size, time);
+}
+
+bool ObjFile::load(const stl::string &name, void *data, size_t size, QWORD time)
+{
+    m_name = name;
+    m_data = data;
+    m_size = size;
+    m_time = time;
 
     size_t ImageBase = (size_t)(m_data);
     PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)ImageBase;
@@ -321,7 +341,7 @@ bool ObjFile::load(const stl::string &path)
     if( pDosHeader->e_magic!=IMAGE_FILE_MACHINE_I386 || pDosHeader->e_sp!=0 ) {
 #endif
         istPrint("DOL fatal: %s 認識できないフォーマットです。/GL (プログラム全体の最適化) 有効でコンパイルされている可能性があります。\n"
-            , m_filepath.c_str());
+            , m_name.c_str());
         ::DebugBreak();
         return false;
     }
@@ -383,6 +403,9 @@ bool ObjFile::load(const stl::string &path)
 // 外部シンボルのリンケージ解決
 bool ObjFile::link()
 {
+    bool ret = true;
+    stl::string mes;
+
     size_t ImageBase = (size_t)(m_data);
     PIMAGE_FILE_HEADER pImageHeader = (PIMAGE_FILE_HEADER)ImageBase;
     PIMAGE_SECTION_HEADER pSectionHeader = (PIMAGE_SECTION_HEADER)(ImageBase + sizeof(IMAGE_FILE_HEADER) + pImageHeader->SizeOfOptionalHeader);
@@ -409,9 +432,11 @@ bool ObjFile::link()
             const char *rname = GetSymbolName(StringTable, rsym);
             size_t rdata = (size_t)m_loader->resolveExternalSymbol(this, rname);
             if(rdata==NULL) {
-                istPrint("DOL fatal: %s が参照するシンボル %s を解決できませんでした。\n", m_filepath.c_str(), rname);
-                ::DebugBreak();
-                return false;
+                char buf[1024];
+                _snprintf(buf, _countof(buf), "DOL fatal: %s が参照するシンボル %s を解決できませんでした。\n", m_name.c_str(), rname);
+                mes += buf;
+                ret = false;
+                continue;
             }
 
             enum {
@@ -474,7 +499,10 @@ bool ObjFile::link()
     // 安全のため VirtualProtect() で write protect をかけたいところだが、
     // const ではない global 変数を含む可能性があるのでフルアクセス可能にしておく必要がある。
     //::VirtualProtect((LPVOID)m_data, m_datasize, PAGE_EXECUTE_READ, &old_protect_flag);
-    return true;
+    if(!ret) {
+        ::OutputDebugStringA(mes.c_str());
+    }
+    return ret;
 }
 
 void* ObjFile::findSymbol(const stl::string &name)
@@ -497,17 +525,22 @@ DynamicObjLoader::~DynamicObjLoader()
     unloadAll();
 }
 
-bool DynamicObjLoader::load( const stl::string &path, bool dont_ignore )
+bool DynamicObjLoader::needsReload( const stl::string &name, QWORD time )
 {
-    // 同名ファイルが読み込み済み && 前回からファイルの更新時刻変わってない ならばなにもしない
-    {
-        ObjTable::iterator i = m_objs.find(path);
-        if(i!=m_objs.end()) {
-            FILETIME t = GetFileModifiedTime(path);
-            if(i->second->getFileTime()==t) {
-                return false;
-            }
+    // 同名ファイルが読み込み済み && 前回からファイルの更新時刻変わってない ならばリロード不要
+    ObjTable::iterator i = m_objs.find(name);
+    if(i!=m_objs.end()) {
+        if(i->second->getFileTime()==time) {
+            return false;
         }
+    }
+    return true;
+}
+
+bool DynamicObjLoader::loadObj( const stl::string &path, bool force )
+{
+    if(!needsReload(path, GetFileModifiedTime(path))) {
+        return false;
     }
 
     ObjFile *obj = new ObjFile(this);
@@ -515,7 +548,7 @@ bool DynamicObjLoader::load( const stl::string &path, bool dont_ignore )
         delete obj;
         return false;
     }
-    if(!dont_ignore) {
+    if(!force) {
         // DOL_Module がない obj は無視
         // .exe を構成する普通の .obj をロードすると、他の .obj がそちらを参照して問題を起こす可能性があるため
         if(obj->findSymbol(g_symname_modulemarker)==NULL) {
@@ -526,24 +559,107 @@ bool DynamicObjLoader::load( const stl::string &path, bool dont_ignore )
         }
     }
 
+    loadObj(path, obj);
+    return true;
+}
+
+void DynamicObjLoader::loadObj( const stl::string &name, ObjFile *obj )
+{
     {
-        ObjTable::iterator i = m_objs.find(path);
+        ObjTable::iterator i = m_objs.find(name);
         // 同名 obj が既にロード済みであれば unload を挟む
         if(i!=m_objs.end()) {
             unload(i->second);
             i->second = obj;
         }
         else {
-            m_objs[path] = obj;
+            m_objs[name] = obj;
         }
     }
 
     // OnLoad を呼ぶリストに追加。リンク処理の後に呼ぶ
     m_handle_onload.push_back(obj);
 
-    istPrint("DOL info: loaded %s\n", path.c_str());
-    return true;
+    istPrint("DOL info: loaded %s\n", name.c_str());
 }
+
+bool DynamicObjLoader::loadLib( const stl::string &path )
+{
+    // .lib の構成は以下を参照
+    // http://hp.vector.co.jp/authors/VA050396/tech_04.html
+
+    void *lib_data;
+    size_t lib_size;
+    if(!MapFile(path, lib_data, lib_size, malloc)) {
+        return false;
+    }
+
+    char *base = (char*)lib_data;
+    if(strncmp(base, IMAGE_ARCHIVE_START, IMAGE_ARCHIVE_START_SIZE)!=0) {
+        free(lib_data);
+        return false;
+    }
+    base += IMAGE_ARCHIVE_START_SIZE;
+
+    char *name_section = NULL;
+    char *first_linker_member = NULL;
+    char *second_linker_member = NULL;
+    for(; base<(char*)lib_data+lib_size; ) {
+        PIMAGE_ARCHIVE_MEMBER_HEADER header = (PIMAGE_ARCHIVE_MEMBER_HEADER)base;
+        base += sizeof(IMAGE_ARCHIVE_MEMBER_HEADER);
+
+        stl::string name;
+        void *data;
+        DWORD32 time, size;
+        sscanf((char*)header->Date, "%d", &time);
+        sscanf((char*)header->Size, "%d", &size);
+
+        // Name の先頭 2 文字が "//" の場合 long name を保持する特殊セクション
+        if(header->Name[0]=='/' && header->Name[1]=='/') {
+            name_section = base;
+        }
+        // Name が '/' 1 文字だけの場合、リンク高速化のためのデータを保持する特殊セクション (最大 2 つある)
+        else if(header->Name[0]=='/' && header->Name[1]==' ') {
+            if     (first_linker_member==NULL)  { first_linker_member = base; }
+            else if(second_linker_member==NULL) { second_linker_member = base; }
+        }
+        else {
+            // Name が '/'+数字 の場合、その数字は long name セクションの offset 値
+            if(header->Name[0]=='/') {
+                DWORD offset;
+                sscanf((char*)header->Name+1, "%d", &offset);
+                name = name_section+offset;
+            }
+            // それ以外の場合 Name にはファイル名が入っている。null terminated ではないので注意が必要 ('/' で終わる)
+            else {
+                char *s = stl::find((char*)header->Name, (char*)header->Name+sizeof(header->Name), '/');
+                name = stl::string((char*)header->Name, s);
+            }
+
+            if(!needsReload(name, time)) {
+                goto GO_NEXT;
+            }
+
+            data = VirtualAllocModule(size);
+            memcpy(data, base, size);
+            ObjFile *obj = new ObjFile(this);
+            if(!obj->load(name, data, size, time)) {
+                delete obj;
+            }
+            else {
+                loadObj(name, obj);
+            }
+        }
+
+    GO_NEXT:
+        base += size;
+        base = (char*)((size_t)base+1 & ~1); // 2 byte align
+    }
+
+    free(lib_data);
+    return false;
+}
+
 
 inline void CallOnLoadHandler(ObjFile *obj)   { if(Handler h=(Handler)obj->findSymbol(g_symname_onload))   { (h)(); } }
 inline void CallOnUnloadHandler(ObjFile *obj) { if(Handler h=(Handler)obj->findSymbol(g_symname_onunload)) { (h)(); } }
@@ -586,6 +702,7 @@ bool DynamicObjLoader::link()
         return true;
     }
 
+    bool ret = true;
     // 全シンボルを 1 つの map に収集
     for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
         i->second->eachSymbol([&](const stl::string &name, void *data){ m_symbols.insert(stl::make_pair(name, data)); });
@@ -593,7 +710,7 @@ bool DynamicObjLoader::link()
     // ↑で集めた map を使うことで、obj 間シンボルもリンク
     for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
         if(!i->second->link()) {
-            return false;
+            ret = false;
         }
     }
     // exe 側から参照されているシンボルを適切に張り替える
@@ -601,12 +718,18 @@ bool DynamicObjLoader::link()
         void *sym = findSymbol(i->first);
         if(sym==NULL) {
             istPrint("DOL fatal: シンボル %s を解決できませんでした。\n", i->first.c_str());
-            ::DebugBreak();
-            return false;
+            ret = false;
         }
         *i->second = sym;
     }
-    istPrint("DOL info: link completed\n");
+
+    if(ret==true) {
+        istPrint("DOL info: link completed\n");
+    }
+    else {
+        istPrint("DOL fatal: link error\n");
+        ::DebugBreak();
+    }
 
     // 新規ロードされているオブジェクトに OnLoad があれば呼ぶ
     for(size_t i=0; i<m_handle_onload.size(); ++i) {
@@ -620,7 +743,7 @@ void DynamicObjLoader::update()
 {
     size_t n = 0;
     for(ObjTable::iterator i=m_objs.begin(); i!=m_objs.end(); ++i) {
-        if(load(i->first, true)) { ++n; }
+        if(loadObj(i->first, true)) { ++n; }
     }
     if(n > 0) { link(); }
 }
@@ -845,13 +968,18 @@ void  DOL_Load(const char *path)
                 tmppath = path;
                 tmppath += "\\";
                 tmppath += wfdata.cFileName;
-                g_objloader->load(tmppath.c_str());
+                g_objloader->loadObj(tmppath.c_str());
             } while(::FindNextFileA(handle, &wfdata));
             ::FindClose(handle);
         }
     }
     else {
-        g_objloader->load(path, true);
+        if(strstr(path, ".lib\0")!=NULL) {
+            g_objloader->loadLib(path);
+        }
+        else {
+            g_objloader->loadObj(path, true);
+        }
     }
 }
 
