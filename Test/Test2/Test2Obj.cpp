@@ -30,7 +30,7 @@ DOL_Export void InitializeParticles(Particle *particles, size_t num_particles)
     for(size_t i=0; i<num_particles; ++i) {
         particles[i].position = XMFLOAT3(GenRand()*3.0f, GenRand()*3.0f, GenRand()*3.0f);
         particles[i].velocity = XMFLOAT3(0.0f, 0.0f, 0.0f);
-        particles[i].radius = 0.05f;
+        particles[i].radius = 0.015f;
     }
 }
 
@@ -83,7 +83,7 @@ DOL_Export void UpdateParticles(Particle *particles, size_t num_particles)
 }
 
 DOL_OnLoad({
-    //Particle *particles = g_particles;
-    //size_t num_particles = MAX_PARTICLES;
-    //InitializeParticles(particles, num_particles);
+    Particle *particles = g_particles;
+    size_t num_particles = MAX_PARTICLES;
+    InitializeParticles(particles, num_particles);
 })

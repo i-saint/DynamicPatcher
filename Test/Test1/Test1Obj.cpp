@@ -7,6 +7,8 @@
 DOL_Module
 
 DOL_Export int g_test = 100;
+DOL_Export int g_test2 = 200;
+DOL_Export int g_test3 = 300;
 
 DOL_Export float FloatAdd(float a, float b)
 {
@@ -55,6 +57,11 @@ DOL_Export IHoge* CreateObjHoge()
 }
 
 
+DOL_DefineMemberFunction(int, Hoge, MemFnTest, (int i))
+{
+    OutputDebugStringA("Hoge::MemFnTest()\n");
+    return i*2;
+}
 
 DOL_OnLoad(
     OutputDebugStringA("DOL_OnLoad Test\n");

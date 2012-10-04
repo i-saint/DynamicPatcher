@@ -27,6 +27,8 @@
 #ifndef __DynamicObjLoader_h__
 #define __DynamicObjLoader_h__
 
+//// 全部 static link するオプション。Master ビルド用。
+//#define DOL_StaticLink
 
 // 一応非 Windows でもビルドエラーにはならないようにしておく
 #if !defined(_WIN32) && !defined(DOL_StaticLink)
@@ -67,17 +69,31 @@
 // obj 側で使います。引数には処理内容を書きます。このブロックはアンロード時に自動的に実行されます。
 #define DOL_OnUnload(...)   DOL_Export static void DOL_OnUnloadHandler() { __VA_ARGS__ }; __declspec(selectany) void *_DOL_OnUnloadHandler=DOL_OnUnloadHandler;
 
-// exe 側で使います。obj から import する関数/変数を宣言します。
+// exe 側で使います。obj から import する関数/メンバ関数/変数を宣言します。
 // obj から import してくるものは exe 側では実際にはポインタなので、複数 cpp に定義があるとリンクエラーになってしまいます。
 // 定義 (DOL_ImportFunction/Variable) は一箇所だけにして、他は宣言を見るだけにする必要があります。
+// DOL_DeclareMemberFunction は class 宣言の中に書きます。
 #define DOL_DeclareFunction(ret, name, arg) extern ret (*name)arg
 #define DOL_DeclareVariable(type, name)     extern DOL_Variable<type> name
+#define DOL_DeclareMemberFunction(Ret, Name, Args)\
+    Ret Name##Impl Args;\
+    Ret Name Args;
+
+// obj 側で使います。メンバ関数を定義します。
+#define DOL_DefineMemberFunction(Ret, Class, Name, Args)\
+    DOL_Export Ret (Class::*g_##Class##_##Name)Args = &Class::Name##Impl;\
+    Ret Class::Name##Impl Args
 
 // exe 側で使います。.obj から import する関数/変数を定義します。
 // 変数は実際には void* を cast operator をかまして返すオブジェクトなので若干注意が必要です。
 // 例えば int の変数を printf で出力する場合、明示的に int に cast しないと意図した結果になりません。
 #define DOL_ImportFunction(ret, name, arg)  ret (*name)arg=NULL; DOL_FunctionLink g_dol_link_##name##(name, DOL_Symbol_Prefix #name)
 #define DOL_ImportVariable(type, name)      DOL_Variable<type> name; DOL_VariableLink g_dol_link_##name##(name, DOL_Symbol_Prefix #name)
+#define DOL_ImportMemberFunction(Ret, Class, Name, Args, ArgNames)\
+    DOL_ImportVariable(Ret (Class::*)Args, g_##Class##_##Name);\
+    Ret Class::Name Args { return (this->*g_##Class##_##Name)ArgNames; }
+
+
 
 
 // 以下 exe 側で使う API
@@ -150,10 +166,13 @@ public:
 #define DOL_Module
 #define DOL_OnLoad(...)
 #define DOL_OnUnload(...)
-#define DOL_DeclareFunction(ret, name, arg) ret name arg
-#define DOL_DeclareVariable(type, name)     extern type name
+#define DOL_DeclareFunction(ret, name, arg)         ret name arg
+#define DOL_DeclareVariable(type, name)             extern type name
+#define DOL_DeclareMemberFunction(Ret, Name, Args)  Ret Name Args
+#define DOL_DefineMemberFunction(Ret, Class, Name, Args)    Ret Class::Name Args
 #define DOL_ImportFunction(ret, name, arg)  ret name arg
 #define DOL_ImportVariable(type, name)      extern type name
+#define DOL_ImportMemberFunction(Ret, Class, Name, Args, ArgNames)
 
 #define DOL_Load(path)
 #define DOL_Update()

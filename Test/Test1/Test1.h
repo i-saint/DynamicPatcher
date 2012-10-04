@@ -9,5 +9,11 @@ public:
     virtual void DoSomething()=0;
 };
 
+class Hoge : public IHoge
+{
+public:
+    virtual void DoSomething();
+    DOL_DeclareMemberFunction(int, MemFnTest, (int));
+};
 
 #endif // __Test_h__

@@ -38,16 +38,13 @@ DOL_Fixate void FuncInExe()
 }
 
 
-class Hoge : public IHoge
+void Hoge::DoSomething()
 {
-public:
-    virtual void DoSomething()
-    {
-        istPrint("Hoge::DoSomething()\n");
-    }
-};
+    istPrint("Hoge::DoSomething()\n");
+}
 
 
+DOL_ImportMemberFunction(int, Hoge, MemFnTest, (int i), (i));
 DOL_ImportFunction(float, FloatAdd, (float, float));
 DOL_ImportFunction(void, CallExternalFunc, ());
 DOL_ImportFunction(void, CallExeFunc, ());
@@ -76,6 +73,7 @@ int main(int argc, _TCHAR* argv[])
         {
             Hoge hoge;
             IHogeReceiver(&hoge);
+            istPrint("ret: %d\n", hoge.MemFnTest(2));
         }
         {
             IHoge *hoge = CreateObjHoge();
