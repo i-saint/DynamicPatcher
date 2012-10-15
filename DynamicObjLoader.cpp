@@ -2,14 +2,14 @@
 #ifndef DOL_StaticLink
 
 #include <windows.h>
-#include <imagehlp.h>
+#include <dbghelp.h>
 #include <process.h>
 #include <cstdio>
 #include <vector>
 #include <string>
 #include <map>
 #include <algorithm>
-#pragma comment(lib, "imagehlp.lib")
+#pragma comment(lib, "dbghelp.lib")
 #pragma warning(disable: 4996) // _s じゃない CRT 関数使うとでるやつ
 
 #pragma warning(disable: 4073) // init_seg(lib) は普通は使っちゃダメ的な warning
