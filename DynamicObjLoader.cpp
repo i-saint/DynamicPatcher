@@ -1,9 +1,11 @@
 ﻿#include "DynamicObjLoader.h"
 #ifndef DOL_StaticLink
 
+#define _NO_CVCONST_H
 #include <windows.h>
 #include <dbghelp.h>
 #include <process.h>
+#include <stdint.h>
 #include <cstdio>
 #include <vector>
 #include <string>
@@ -201,6 +203,92 @@ bool IsDirectory(const char *path)
 {
     DWORD attr = ::GetFileAttributesA(path);
     return (attr & FILE_ATTRIBUTE_DIRECTORY)!=0;
+}
+
+
+
+enum BasicType
+{
+    btNoType = 0,
+    btVoid = 1,
+    btChar = 2,
+    btWChar = 3,
+    btInt = 6,
+    btUInt = 7,
+    btFloat = 8,
+    btBCD = 9,
+    btBool = 10,
+    btLong = 13,
+    btULong = 14,
+    btCurrency = 25,
+    btDate = 26,
+    btVariant = 27,
+    btComplex = 28,
+    btBit = 29,
+    btBSTR = 30,
+    btHresult = 31
+};
+void BasetypeToString(DWORD t, ULONG64 size, stl::string &ret)
+{
+    ret.clear();
+    switch(t) {
+    case btVoid:  ret += "void"; break;
+    case btChar:  ret += "char"; break;
+    case btWChar: ret += "wchar_t"; break;
+    case btInt:
+    case btLong:
+        switch(size) {
+        case 1: ret+="int8_t"; break;
+        case 2: ret+="int16_t"; break;
+        case 4: ret+="int32_t"; break;
+        case 8: ret+="int64_t"; break;
+        }
+        break;
+    case btUInt:
+    case btULong:
+        switch(size) {
+        case 1: ret+="uint8_t"; break;
+        case 2: ret+="uint16_t"; break;
+        case 4: ret+="uint32_t"; break;
+        case 8: ret+="uint64_t"; break;
+        }
+        break;
+    case btFloat:
+        switch(size) {
+        case 4: ret+="float"; break;
+        case 8: ret+="double"; break;
+        }
+        break;
+    }
+}
+void TypeToString(SYMBOL_INFO *si, DWORD t, stl::string &ret)
+{
+    DWORD tag;
+    DWORD type;
+    ::SymGetTypeInfo(::GetCurrentProcess(), si->ModBase, t, TI_GET_SYMTAG, &tag );
+
+    if(tag==SymTagBaseType) {
+        if( ::SymGetTypeInfo(::GetCurrentProcess(), si->ModBase, t, TI_GET_BASETYPE, &type ) ) {
+            ULONG64 len;
+            ::SymGetTypeInfo(::GetCurrentProcess(), si->ModBase, t, TI_GET_LENGTH, &len );
+            BasetypeToString(type, len, ret);
+        }
+    }
+    else if(tag==SymTagData) {
+        if( ::SymGetTypeInfo(::GetCurrentProcess(), si->ModBase, t, TI_GET_TYPEID, &type ) ) {
+            //WCHAR *name;
+            //if(::SymGetTypeInfo(::GetCurrentProcess(), si->ModBase, t, TI_GET_SYMNAME, &name )) {
+            //    ::LocalFree(name);
+            //}
+            TypeToString(si, type, ret);
+        }
+    }
+    if(tag==SymTagPointerType) {
+        if( ::SymGetTypeInfo(::GetCurrentProcess(), si->ModBase, t, TI_GET_TYPEID, &type ) ) {
+            TypeToString(si, type, ret);
+            ret += "*";
+        }
+    }
 }
 
 
@@ -966,31 +1054,40 @@ public:
 
     struct EnumSymbolsCallbackContext {
         void *esp;
-        stl::string *src;
+        stl::string *src_sym;
+        stl::string *src_lk;
     };
-
-    static BOOL CALLBACK EnumSymbolsCallback( SYMBOL_INFO* pSymInfo, ULONG SymbolSize, PVOID UserContext ) 
+    static BOOL CALLBACK EnumSymbolsCallback( SYMBOL_INFO* si, ULONG SymbolSize, PVOID UserContext ) 
     {
         EnumSymbolsCallbackContext *context = (EnumSymbolsCallbackContext*)UserContext;
-        stl::string &src = *context->src;
-        if( pSymInfo != 0 ) {
+        stl::string &src_sym = *context->src_sym;
+        stl::string &src_lk = *context->src_lk;
+        if( si != 0 ) {
 #ifdef _WIN64
-            ULONG64 Address = (ULONG64)context->esp + pSymInfo->Address;
+            ULONG64 Address = (ULONG64)context->esp + si->Address;
 #else // _WIN64
-            ULONG64 Address = (ULONG64)context->esp + pSymInfo->Address - 4;
+            ULONG64 Address = (ULONG64)context->esp + si->Address - 4;
 #endif // _WIN64
 
-            src += "void *";
-            src += stl::string(pSymInfo->Name, pSymInfo->NameLen);
+            stl::string type;
+            stl::string name(si->Name, si->NameLen);
+            TypeToString(si, si->TypeIndex, type);
+
             char buf[256];
-            sprintf(buf, "=(void*)0x%lx;\n", Address);
-            src += buf;
+            sprintf(buf, "0x%lx;\n", Address);
+            src_sym += type + "* sym_" + name + "=(" + type + "*)" + buf;
+            src_lk += type + "& " + name + "= *sym_"+name+";\n";
         }
 
         return TRUE; // Continue enumeration 
     }
 
-    std::string compileEvalBlock(const char *function, void *esp, const char *source, const char *context)
+    void setGlobalEvalContext(const char *context)
+    {
+        m_eval_global_context = context;
+    }
+
+    std::string compileEvalBlock(const char *function, void *esp, const char *source)
     {
         std::string ret;
         ::InterlockedIncrement(&m_eval_id);
@@ -999,10 +1096,12 @@ public:
         {
             FILE *sourcefile = fopen(filename, "wb");
             {
-                stl::string src = context;
+                stl::string src = m_eval_global_context;
+                src += "#include <stdint.h>\n";
                 src += "\n";
 
-                EnumSymbolsCallbackContext c = {esp, &src};
+                stl::string lk;
+                EnumSymbolsCallbackContext c = {esp, &src, &lk};
 
                 DWORD64 SymAddr = (DWORD64)FindSymbolInExe(function);
                 IMAGEHLP_STACK_FRAME sf; 
@@ -1010,14 +1109,15 @@ public:
                 ::SymSetContext(GetCurrentProcess(), &sf, 0 );
                 ::SymEnumSymbols(GetCurrentProcess(), 0, 0, EnumSymbolsCallback, &c); 
 
-                src += "extern \"C\" void evalblock() {";
+                src += "\nextern \"C\" void evalblock()\n{\n";
+                src += lk;
                 src += source;
-                src += "}\n";
+                src += "\n}\n";
                 fwrite(src.c_str(), 1, src.size(), sourcefile);
             }
             fclose(sourcefile);
         }
-        if(execCompile(filename, "/c /O2")) {
+        if(execCompile(filename, "/c /O2 /nologo")) {
             ret = filename;
             size_t pos = ret.find(".cpp");
             ret.erase(ret.begin()+pos, ret.end());
@@ -1036,7 +1136,9 @@ private:
     mutable bool m_build_has_just_completed;
     bool m_flag_exit;
     HANDLE m_thread_watchfile;
+
     volatile LONG m_eval_id;
+    stl::string m_eval_global_context;
 };
 
 
@@ -1132,14 +1234,19 @@ void DOL_AddSourceDirectory(const char *path)
 };
 
 
+void DOL_EvalSetGlobalContext(const char *source)
+{
+    g_builder->setGlobalEvalContext(source);
+};
+
 void* _DOL_GetEsp()
 {
     return (void*)((size_t)_AddressOfReturnAddress()+sizeof(void*));
 }
 
-void _DOL_Eval(const char *function, void *esp, const char *source, const char *context)
+void _DOL_Eval(const char *function, void *esp, const char *source)
 {
-    std::string objfile = g_builder->compileEvalBlock(function, esp, source, context);
+    std::string objfile = g_builder->compileEvalBlock(function, esp, source);
     if(objfile.empty()) {
         istPrint("DOL warning: DOL_Eval() failed.\n");
         return;

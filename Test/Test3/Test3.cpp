@@ -9,9 +9,13 @@ int main(int argc, char* argv[])
 
     printf(""); // これがないと exe 内に printf() が含まれなくなるので eval の中から呼べなくなる
 
-    volatile int hoge = 10; // 最適化で消えるの防止の volatile 
+    volatile int hoge = 10; // volatile: 最適化で消えるの防止
     volatile double hage = 1.0;
-    DOL_Eval("printf(\"%d %lf\\n\", *(int*)hoge, *(double*)hage);", "#include <cstdio>\n"); // 現状 eval 内から参照されるホスト側変数は全部 void*
+
+    DOL_EvalSetGlobalContext("#include <cstdio>\n");
+    DOL_Eval("printf(\"%d %lf\\n\", hoge, hage);");
+    DOL_Eval("hoge+=10; hage*=2.0;");
+    DOL_Eval("printf(\"%d %lf\\n\", hoge, hage);");
 
     return 0;
 }

@@ -128,12 +128,14 @@ void DOL_StartAutoRecompile(const char *build_options, bool create_console_windo
 void DOL_AddSourceDirectory(const char *path);
 
 
+void DOL_EvalSetGlobalContext(const char *source);
+
 __declspec(noinline) void* _DOL_GetEsp();
-void _DOL_Eval(const char *function, void *esp, const char *source, const char *context="");
+void _DOL_Eval(const char *function, void *esp, const char *source);
 #ifdef _WIN64
-#   define DOL_Eval(src, ...) _DOL_Eval(__FUNCTION__, _DOL_GetEsp(), src, __VA_ARGS__)
+#   define DOL_Eval(src) _DOL_Eval(__FUNCTION__, _DOL_GetEsp(), src)
 #else // _WIN64
-#   define DOL_Eval(src, ...) _DOL_Eval(__FUNCTION__, _AddressOfReturnAddress(), src, __VA_ARGS__)
+#   define DOL_Eval(src) _DOL_Eval(__FUNCTION__, _AddressOfReturnAddress(), src)
 #endif // _WIN64
 
 
@@ -194,6 +196,7 @@ public:
 #define DOL_StartAutoRecompile(...)
 #define DOL_AddSourceDirectory(...)
 
+#define DOL_EvalSetGlobalContext(...)
 #define DOL_Eval(...)
 
 
