@@ -130,7 +130,11 @@ void DOL_AddSourceDirectory(const char *path);
 
 __declspec(noinline) void* _DOL_GetEsp();
 void _DOL_Eval(const char *function, void *esp, const char *source, const char *context="");
-#define DOL_Eval(src, ...) _DOL_Eval(__FUNCTION__, _AddressOfReturnAddress(), src, __VA_ARGS__)
+#ifdef _WIN64
+#   define DOL_Eval(src, ...) _DOL_Eval(__FUNCTION__, _DOL_GetEsp(), src, __VA_ARGS__)
+#else // _WIN64
+#   define DOL_Eval(src, ...) _DOL_Eval(__FUNCTION__, _AddressOfReturnAddress(), src, __VA_ARGS__)
+#endif // _WIN64
 
 
 // 以下内部実装用

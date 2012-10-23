@@ -871,7 +871,7 @@ public:
                 for(size_t i=0; i<m_srcdirs.size(); ++i) {
                     // ビルドで大量のファイルに変更が加わっていることがあり、以後の FindFirstChangeNotificationA() はそれを検出してしまう。
                     // そうなると永遠にビルドし続けてしまうため、HANDLE ごと作りなおして一度リセットする。
-                    FindCloseChangeNotification(m_srcdirs[i].notifier);
+                    ::FindCloseChangeNotification(m_srcdirs[i].notifier);
                     m_srcdirs[i].notifier = ::FindFirstChangeNotificationA(m_srcdirs[i].path.c_str(), TRUE, FILE_NOTIFY_CHANGE_LAST_WRITE);
                 }
             }
@@ -881,11 +881,11 @@ public:
         }
 
         for(size_t i=0; i<m_srcdirs.size(); ++i) {
-            FindCloseChangeNotification(m_srcdirs[i].notifier);
+            ::FindCloseChangeNotification(m_srcdirs[i].notifier);
         }
     }
 
-    void execBuild()
+    bool execBuild()
     {
         istPrint("DOL info: recompile begin\n");
         stl::string command = m_msbuild;
@@ -898,14 +898,21 @@ public:
         memset(&pi, 0, sizeof(pi)); 
         si.cb = sizeof(si);
         if(::CreateProcessA(NULL, (LPSTR)command.c_str(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)==TRUE) {
+            DWORD exit_code = 0;
             ::WaitForSingleObject(pi.hThread, INFINITE);
             ::WaitForSingleObject(pi.hProcess, INFINITE);
+            ::GetExitCodeProcess(pi.hProcess, &exit_code);
             ::CloseHandle(pi.hThread);
             ::CloseHandle(pi.hProcess);
             ::Sleep(500); // 終了直後だとファイルの書き込みが終わってないことがあるっぽい？ので少し待つ…
             m_build_has_just_completed = true;
+            if(exit_code!=0) {
+                istPrint("DOL error: build error.\n");
+                return false;
+            }
         }
         istPrint("DOL info: recompile end\n");
+        return true;
     }
 
     void addSourceDirectory(const char *path)
@@ -938,10 +945,20 @@ public:
         memset(&pi, 0, sizeof(pi)); 
         si.cb = sizeof(si);
         if(::CreateProcessA(NULL, (LPSTR)command.c_str(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)==TRUE) {
+            DWORD exit_code = 0;
             ::WaitForSingleObject(pi.hThread, INFINITE);
             ::WaitForSingleObject(pi.hProcess, INFINITE);
+            ::GetExitCodeProcess(pi.hProcess, &exit_code);
             ::CloseHandle(pi.hThread);
             ::CloseHandle(pi.hProcess);
+            if(exit_code!=0) {
+                istPrint("DOL error: compile error.\n");
+                return false;
+            }
+        }
+        else {
+            istPrint("DOL fatal: CreateProcessA() failed.\n");
+            return false;
         }
         istPrint("DOL info: eval end\n");
         return true;
@@ -957,13 +974,16 @@ public:
         EnumSymbolsCallbackContext *context = (EnumSymbolsCallbackContext*)UserContext;
         stl::string &src = *context->src;
         if( pSymInfo != 0 ) {
-            ULONG64 base = (ULONG64)context->esp;
-            WCHAR *name = NULL;
-            BOOL ret = ::SymGetTypeInfo(::GetCurrentProcess(), pSymInfo->ModBase, pSymInfo->TypeIndex, TI_GET_SYMNAME, &name );
+#ifdef _WIN64
+            ULONG64 Address = (ULONG64)context->esp + pSymInfo->Address;
+#else // _WIN64
+            ULONG64 Address = (ULONG64)context->esp + pSymInfo->Address - 4;
+#endif // _WIN64
+
             src += "void *";
             src += stl::string(pSymInfo->Name, pSymInfo->NameLen);
             char buf[256];
-            sprintf(buf, "=(void*)0x%lx;\n", base+pSymInfo->Address-pSymInfo->Size);
+            sprintf(buf, "=(void*)0x%lx;\n", Address);
             src += buf;
         }
 
@@ -1114,7 +1134,7 @@ void DOL_AddSourceDirectory(const char *path)
 
 void* _DOL_GetEsp()
 {
-    return (void*)((size_t)_AddressOfReturnAddress()-sizeof(void*));
+    return (void*)((size_t)_AddressOfReturnAddress()+sizeof(void*));
 }
 
 void _DOL_Eval(const char *function, void *esp, const char *source, const char *context)
