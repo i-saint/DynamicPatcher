@@ -27,6 +27,8 @@
 #ifndef __DynamicObjLoader_h__
 #define __DynamicObjLoader_h__
 
+#include <intrin.h>
+
 //// 全部 static link するオプション。Master ビルド用。
 //#define DOL_StaticLink
 
@@ -126,6 +128,11 @@ void DOL_StartAutoRecompile(const char *build_options, bool create_console_windo
 void DOL_AddSourceDirectory(const char *path);
 
 
+__declspec(noinline) void* _DOL_GetEsp();
+void _DOL_Eval(const char *function, void *esp, const char *source, const char *context="");
+#define DOL_Eval(src, ...) _DOL_Eval(__FUNCTION__, _AddressOfReturnAddress(), src, __VA_ARGS__)
+
+
 // 以下内部実装用
 
 template<class T>
@@ -182,6 +189,8 @@ public:
 
 #define DOL_StartAutoRecompile(...)
 #define DOL_AddSourceDirectory(...)
+
+#define DOL_Eval(...)
 
 
 #endif // DOL_StaticLink

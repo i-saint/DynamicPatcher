@@ -219,6 +219,7 @@ public:
     void unload();
     bool link();
     void* findSymbol(const stl::string &name);
+    void addSymbol(const stl::string &name, void *sym) { m_symbols[name]=sym; }
 
     // f: functor [](const stl::string &symbol_name, const void *data)
     template<class F>
@@ -787,19 +788,18 @@ public:
         , m_build_has_just_completed(false)
         , m_flag_exit(false)
         , m_thread_watchfile(NULL)
+        , m_eval_id(0)
     {
         stl::string VCVersion;
-        {
-            //switch around prefered compiler to the one we've used to compile this file
-            const unsigned int MSCVERSION = _MSC_VER;
-            switch( MSCVERSION )
-            {
-            case 1500: VCVersion="9.0";  break; //VS 2008
-            case 1600: VCVersion="10.0"; break; //VS 2010
-            case 1700: VCVersion="11.0"; break; //VS 2011
-            default: ::DebugBreak(); //shouldn't happen.
-            }
-        }
+#if     _MSC_VER==1500
+        VCVersion = "9.0";
+#elif   _MSC_VER==1600
+        VCVersion = "10.0";
+#elif   _MSC_VER==1700
+        VCVersion = "11.0";
+#else
+#   error
+#endif
 
         //HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VisualStudio\<version>\Setup\VS\<edition>
         stl::string keyName = "SOFTWARE\\Microsoft\\VisualStudio\\SxS\\VC7";
@@ -809,15 +809,16 @@ public:
         LONG retKey = ::RegOpenKeyExA(HKEY_LOCAL_MACHINE, keyName.c_str(), 0, KEY_READ|KEY_WOW64_32KEY, &key);
         LONG retVal = ::RegQueryValueExA(key, VCVersion.c_str(), NULL, NULL, (LPBYTE)value, &size );
         if( retKey==ERROR_SUCCESS && retVal==ERROR_SUCCESS  ) {
-            m_msbuild += '"';
-            m_msbuild += value;
-            m_msbuild += "vcvarsall.bat";
-            m_msbuild += '"';
+            m_vcvars += '"';
+            m_vcvars += value;
+            m_vcvars += "vcvarsall.bat";
+            m_vcvars += '"';
 #ifdef _WIN64
-            m_msbuild += " amd64";
+            m_vcvars += " amd64";
 #else // _WIN64
-            m_msbuild += " x86";
+            m_vcvars += " x86";
 #endif // _WIN64
+            m_msbuild = m_vcvars;
             m_msbuild += " && ";
             m_msbuild += "msbuild";
         }
@@ -897,8 +898,11 @@ public:
         memset(&pi, 0, sizeof(pi)); 
         si.cb = sizeof(si);
         if(::CreateProcessA(NULL, (LPSTR)command.c_str(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)==TRUE) {
+            ::WaitForSingleObject(pi.hThread, INFINITE);
             ::WaitForSingleObject(pi.hProcess, INFINITE);
-            ::Sleep(1000); // 終了直後だとファイルの書き込みが終わってないことがあるっぽい？ので少し待つ…
+            ::CloseHandle(pi.hThread);
+            ::CloseHandle(pi.hProcess);
+            ::Sleep(500); // 終了直後だとファイルの書き込みが終わってないことがあるっぽい？ので少し待つ…
             m_build_has_just_completed = true;
         }
         istPrint("DOL info: recompile end\n");
@@ -919,7 +923,92 @@ public:
         return false;
     }
 
+    bool execCompile(const char *filename, const char *opt)
+    {
+        istPrint("DOL info: eval begin\n");
+        stl::string command = m_vcvars;
+        command+=" && cl ";
+        command+=opt;
+        command+=" ";
+        command+=filename;
+
+        STARTUPINFOA si; 
+        PROCESS_INFORMATION pi; 
+        memset(&si, 0, sizeof(si)); 
+        memset(&pi, 0, sizeof(pi)); 
+        si.cb = sizeof(si);
+        if(::CreateProcessA(NULL, (LPSTR)command.c_str(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)==TRUE) {
+            ::WaitForSingleObject(pi.hThread, INFINITE);
+            ::WaitForSingleObject(pi.hProcess, INFINITE);
+            ::CloseHandle(pi.hThread);
+            ::CloseHandle(pi.hProcess);
+        }
+        istPrint("DOL info: eval end\n");
+        return true;
+    }
+
+    struct EnumSymbolsCallbackContext {
+        void *esp;
+        stl::string *src;
+    };
+
+    static BOOL CALLBACK EnumSymbolsCallback( SYMBOL_INFO* pSymInfo, ULONG SymbolSize, PVOID UserContext ) 
+    {
+        EnumSymbolsCallbackContext *context = (EnumSymbolsCallbackContext*)UserContext;
+        stl::string &src = *context->src;
+        if( pSymInfo != 0 ) {
+            ULONG64 base = (ULONG64)context->esp;
+            WCHAR *name = NULL;
+            BOOL ret = ::SymGetTypeInfo(::GetCurrentProcess(), pSymInfo->ModBase, pSymInfo->TypeIndex, TI_GET_SYMNAME, &name );
+            src += "void *";
+            src += stl::string(pSymInfo->Name, pSymInfo->NameLen);
+            char buf[256];
+            sprintf(buf, "=(void*)0x%lx;\n", base+pSymInfo->Address-pSymInfo->Size);
+            src += buf;
+        }
+
+        return TRUE; // Continue enumeration 
+    }
+
+    std::string compileEvalBlock(const char *function, void *esp, const char *source, const char *context)
+    {
+        std::string ret;
+        ::InterlockedIncrement(&m_eval_id);
+        char filename[128];
+        sprintf(filename, "evalsource%d.cpp", m_eval_id);
+        {
+            FILE *sourcefile = fopen(filename, "wb");
+            {
+                stl::string src = context;
+                src += "\n";
+
+                EnumSymbolsCallbackContext c = {esp, &src};
+
+                DWORD64 SymAddr = (DWORD64)FindSymbolInExe(function);
+                IMAGEHLP_STACK_FRAME sf; 
+                sf.InstructionOffset = SymAddr;
+                ::SymSetContext(GetCurrentProcess(), &sf, 0 );
+                ::SymEnumSymbols(GetCurrentProcess(), 0, 0, EnumSymbolsCallback, &c); 
+
+                src += "extern \"C\" void evalblock() {";
+                src += source;
+                src += "}\n";
+                fwrite(src.c_str(), 1, src.size(), sourcefile);
+            }
+            fclose(sourcefile);
+        }
+        if(execCompile(filename, "/c /O2")) {
+            ret = filename;
+            size_t pos = ret.find(".cpp");
+            ret.erase(ret.begin()+pos, ret.end());
+            ret += ".obj";
+        }
+        unlink(filename);
+        return ret;
+    }
+
 private:
+    stl::string m_vcvars;
     stl::string m_msbuild;
     stl::string m_msbuild_option;
     stl::vector<SourceDir> m_srcdirs;
@@ -927,6 +1016,7 @@ private:
     mutable bool m_build_has_just_completed;
     bool m_flag_exit;
     HANDLE m_thread_watchfile;
+    volatile LONG m_eval_id;
 };
 
 
@@ -1020,6 +1110,31 @@ void DOL_AddSourceDirectory(const char *path)
 {
     g_builder->addSourceDirectory(path);
 };
+
+
+void* _DOL_GetEsp()
+{
+    return (void*)((size_t)_AddressOfReturnAddress()-sizeof(void*));
+}
+
+void _DOL_Eval(const char *function, void *esp, const char *source, const char *context)
+{
+    std::string objfile = g_builder->compileEvalBlock(function, esp, source, context);
+    if(objfile.empty()) {
+        istPrint("DOL warning: DOL_Eval() failed.\n");
+        return;
+    }
+
+    typedef void (*evalf)();
+    ObjFile *obj = new ObjFile(g_objloader);
+    obj->load(objfile.c_str());
+    unlink(objfile.c_str());
+    obj->link();
+    if(evalf f = (evalf)obj->findSymbol(DOL_Symbol_Prefix "evalblock")) {
+        f();
+    }
+    delete obj;
+}
 
 
 #endif // DOL_StaticLink

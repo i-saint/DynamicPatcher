@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="..\..\DynamicObjLoader.h">
+      <Filter>DynamicObjLoader</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\DynamicObjLoader.cpp">
+      <Filter>DynamicObjLoader</Filter>
+    </ClCompile>
+    <ClCompile Include="Test3.cpp">
+      <Filter>Test3</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="DynamicObjLoader">
+      <UniqueIdentifier>{88b61b2c-e193-4f16-86dd-6cdb5d55644f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Test3">
+      <UniqueIdentifier>{cec1ea66-648c-473f-a8c5-0b4e4a7f6a64}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
