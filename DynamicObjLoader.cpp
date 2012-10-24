@@ -238,19 +238,19 @@ void BasetypeToString(DWORD t, ULONG64 size, stl::string &ret)
     case btInt:
     case btLong:
         switch(size) {
-        case 1: ret+="int8_t"; break;
-        case 2: ret+="int16_t"; break;
-        case 4: ret+="int32_t"; break;
-        case 8: ret+="int64_t"; break;
+        case 1: ret+="char"; break;
+        case 2: ret+="short"; break;
+        case 4: ret+="int"; break;
+        case 8: ret+="long long"; break;
         }
         break;
     case btUInt:
     case btULong:
         switch(size) {
-        case 1: ret+="uint8_t"; break;
-        case 2: ret+="uint16_t"; break;
-        case 4: ret+="uint32_t"; break;
-        case 8: ret+="uint64_t"; break;
+        case 1: ret+="unsigned char"; break;
+        case 2: ret+="unsigned short"; break;
+        case 4: ret+="unsigned int"; break;
+        case 8: ret+="unsigned long long"; break;
         }
         break;
     case btFloat:
@@ -276,18 +276,23 @@ void TypeToString(SYMBOL_INFO *si, DWORD t, stl::string &ret)
     }
     else if(tag==SymTagData) {
         if( ::SymGetTypeInfo(::GetCurrentProcess(), si->ModBase, t, TI_GET_TYPEID, &type ) ) {
-            //WCHAR *name;
-            //if(::SymGetTypeInfo(::GetCurrentProcess(), si->ModBase, t, TI_GET_SYMNAME, &name )) {
-            //    ::LocalFree(name);
-            //}
             TypeToString(si, type, ret);
         }
     }
-    if(tag==SymTagPointerType) {
+    else if(tag==SymTagPointerType) {
         if( ::SymGetTypeInfo(::GetCurrentProcess(), si->ModBase, t, TI_GET_TYPEID, &type ) ) {
             TypeToString(si, type, ret);
             ret += "*";
         }
+    }
+    else if(tag==SymTagUDT) {
+        WCHAR *wname = NULL;
+        ::SymGetTypeInfo(::GetCurrentProcess(), si->ModBase, t, TI_GET_SYMNAME, &wname );
+        char name[1024];
+        size_t num = 0;
+        ::wcstombs_s(&num, name, wname, _countof(name));
+        ::LocalFree(wname);
+        ret += name;
     }
 }
 
@@ -1018,13 +1023,12 @@ public:
         return false;
     }
 
-    bool execCompile(const char *filename, const char *opt)
+    bool execCompile(const char *filename)
     {
         istPrint("DOL info: eval begin\n");
         stl::string command = m_vcvars;
         command+=" && cl ";
-        command+=opt;
-        command+=" ";
+        command+=m_cl_option + " /c /O2 /GR- /nologo ";
         command+=filename;
 
         STARTUPINFOA si; 
@@ -1082,12 +1086,17 @@ public:
         return TRUE; // Continue enumeration 
     }
 
+    void setCompileOption(const char *opt)
+    {
+        m_cl_option = opt;
+    }
+
     void setGlobalEvalContext(const char *context)
     {
         m_eval_global_context = context;
     }
 
-    std::string compileEvalBlock(const char *function, void *esp, const char *source)
+    std::string compileEvalBlock(const char *file, int line, const char *function, void *esp, const char *source)
     {
         std::string ret;
         ::InterlockedIncrement(&m_eval_id);
@@ -1097,7 +1106,7 @@ public:
             FILE *sourcefile = fopen(filename, "wb");
             {
                 stl::string src = m_eval_global_context;
-                src += "#include <stdint.h>\n";
+                src += stl::string("#include \"") + file + "\"\n";
                 src += "\n";
 
                 stl::string lk;
@@ -1117,7 +1126,7 @@ public:
             }
             fclose(sourcefile);
         }
-        if(execCompile(filename, "/c /O2 /nologo")) {
+        if(execCompile(filename)) {
             ret = filename;
             size_t pos = ret.find(".cpp");
             ret.erase(ret.begin()+pos, ret.end());
@@ -1138,6 +1147,7 @@ private:
     HANDLE m_thread_watchfile;
 
     volatile LONG m_eval_id;
+    stl::string m_cl_option;
     stl::string m_eval_global_context;
 };
 
@@ -1234,6 +1244,11 @@ void DOL_AddSourceDirectory(const char *path)
 };
 
 
+void DOL_EvalSetCompileOption( const char *options )
+{
+    g_builder->setCompileOption(options);
+}
+
 void DOL_EvalSetGlobalContext(const char *source)
 {
     g_builder->setGlobalEvalContext(source);
@@ -1244,9 +1259,9 @@ void* _DOL_GetEsp()
     return (void*)((size_t)_AddressOfReturnAddress()+sizeof(void*));
 }
 
-void _DOL_Eval(const char *function, void *esp, const char *source)
+void _DOL_Eval(const char *file, int line, const char *function, void *esp, const char *source)
 {
-    std::string objfile = g_builder->compileEvalBlock(function, esp, source);
+    std::string objfile = g_builder->compileEvalBlock(file, line, function, esp, source);
     if(objfile.empty()) {
         istPrint("DOL warning: DOL_Eval() failed.\n");
         return;

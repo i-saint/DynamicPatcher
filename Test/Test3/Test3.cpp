@@ -1,21 +1,82 @@
 ﻿#include <cstdio>
-#include <windows.h>
-#include "DynamicObjLoader.h"
+#include <string>
+#include "../../DynamicObjLoader.h"
 
+class Hoge
+{
+public:
+    Hoge() { printf("Hoge::Hoge()\n"); }
+    ~Hoge() { printf("Hoge::~Hoge()\n"); }
+    void ExecHoge() { printf("Hoge::ExecHoge()\n"); }
+};
+
+class Hage
+{
+public:
+    Hage() { printf("Hage::Hage()\n"); }
+    ~Hage() { printf("Hage::~Hage()\n"); }
+    void ExecHage() { printf("Hage::ExecHage()\n"); }
+};
+
+
+void* Create(const std::string &name)
+{
+    volatile void *obj = NULL;
+    std::string source = "obj = new "+name+"();";
+    DOL_Eval(source.c_str());
+    return (void*)obj;
+}
+
+void Delete(void *_obj, const std::string &name)
+{
+    volatile void *obj = _obj;
+    std::string source = "delete reinterpret_cast<"+name+"*>(obj);";
+    DOL_Eval(source.c_str());
+}
+
+void CallMemberFunction(void *_obj, const std::string &type, const std::string &func)
+{
+    volatile void *obj = _obj;
+    std::string source = "reinterpret_cast<"+type+"*>(obj)->"+func+"();";
+    DOL_Eval(source.c_str());
+}
+
+void TestReflection()
+{
+    {
+        void *obj = Create("Hoge");
+        CallMemberFunction(obj, "Hoge", "ExecHoge");
+        Delete(obj, "Hoge");
+    }
+    {
+        void *obj = Create("Hage");
+        CallMemberFunction(obj, "Hage", "ExecHage");
+        Delete(obj, "Hage");
+    }
+}
+
+
+void TestLocalVariable()
+{
+    volatile int hoge = 10; // volatile: 最適化で消えるの防止
+    volatile double hage = 1.0;
+    DOL_Eval("printf(\"%d %lf\\n\", hoge, hage);");
+    DOL_Eval("hoge+=10;");
+    DOL_Eval("hage*=2.0;");
+    DOL_Eval("printf(\"%d %lf\\n\", hoge, hage);");
+
+    void *obj = NULL;
+    DOL_Eval("obj = new Hoge();");
+
+    printf("%d %lf\n", hoge, hage);
+}
 
 int main(int argc, char* argv[])
 {
-    AllocConsole();
+    DOL_EvalSetCompileOption("/EHsc");
 
-    printf(""); // これがないと exe 内に printf() が含まれなくなるので eval の中から呼べなくなる
-
-    volatile int hoge = 10; // volatile: 最適化で消えるの防止
-    volatile double hage = 1.0;
-
-    DOL_EvalSetGlobalContext("#include <cstdio>\n");
-    DOL_Eval("printf(\"%d %lf\\n\", hoge, hage);");
-    DOL_Eval("hoge+=10; hage*=2.0;");
-    DOL_Eval("printf(\"%d %lf\\n\", hoge, hage);");
+    TestLocalVariable();
+    TestReflection();
 
     return 0;
 }
