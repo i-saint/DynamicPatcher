@@ -14,8 +14,6 @@
 #pragma comment(lib, "dbghelp.lib")
 #pragma warning(disable: 4996) // _s じゃない CRT 関数使うとでるやつ
 
-#pragma warning(disable: 4073) // init_seg(lib) は普通は使っちゃダメ的な warning
-#pragma init_seg(lib) // global オブジェクトの初期化の優先順位上げる
 
 namespace dol {
 
@@ -1155,22 +1153,30 @@ private:
 DynamicObjLoader *g_objloader = NULL;
 Builder *g_builder = NULL;
 
-class DOL_Initializer
+void _DOL_Initialize()
 {
-public:
-    DOL_Initializer()
-    {
+    if(!g_objloader) {
         InitializeDebugSymbol();
         g_objloader = new DynamicObjLoader();
         g_builder = new Builder();
     }
+}
 
-    ~DOL_Initializer()
-    {
-        delete g_builder;  g_builder=NULL;
-        delete g_objloader; g_objloader=NULL;
-    }
-} g_dol_init;
+void _DOL_Finalize()
+{
+    delete g_builder;   g_builder=NULL;
+    delete g_objloader; g_objloader=NULL;
+};
+
+struct _DOL_Finalizer
+{
+    _DOL_Finalizer() { _DOL_Initialize(); }
+    ~_DOL_Finalizer() { _DOL_Finalize(); }
+} g_dol_finalizer;
+
+DynamicObjLoader*   _DOL_GetLoader()  { _DOL_Initialize(); return g_objloader; }
+Builder*            _DOL_GetBuilder() { _DOL_Initialize(); return g_builder; }
+
 
 } // namespace dol
 
@@ -1178,6 +1184,7 @@ using namespace dol;
 
 void  DOL_Load(const char *path)
 {
+    DynamicObjLoader *loader = _DOL_GetLoader();
     if(IsDirectory(path)) {
         stl::string tmppath;
         stl::string key = path;
@@ -1190,68 +1197,68 @@ void  DOL_Load(const char *path)
                 tmppath = path;
                 tmppath += "\\";
                 tmppath += wfdata.cFileName;
-                g_objloader->loadObj(tmppath.c_str());
+                loader->loadObj(tmppath.c_str());
             } while(::FindNextFileA(handle, &wfdata));
             ::FindClose(handle);
         }
     }
     else {
         if(strstr(path, ".lib\0")!=NULL) {
-            g_objloader->loadLib(path);
+            loader->loadLib(path);
         }
         else {
-            g_objloader->loadObj(path, true);
+            loader->loadObj(path, true);
         }
     }
 }
 
 void DOL_Unload(const char *path)
 {
-    g_objloader->unload(path);
+    _DOL_GetLoader()->unload(path);
 }
 
 void DOL_UnloadAll()
 {
-    g_objloader->unloadAll();
+    _DOL_GetLoader()->unloadAll();
 }
 
 void DOL_Link()
 {
-    g_objloader->link();
+    _DOL_GetLoader()->link();
 }
 
 void DOL_Update()
 {
-    if(g_builder->needsUpdate()) {
-        g_objloader->update();
+    if(_DOL_GetBuilder()->needsUpdate()) {
+        _DOL_GetLoader()->update();
     }
 }
 
 void DOL_LinkSymbol(const char *name, void *&target)
 {
-    g_objloader->addSymbolLink(name, target);
+    _DOL_GetLoader()->addSymbolLink(name, target);
 }
 
 
 void DOL_StartAutoRecompile(const char *build_options, bool create_console_window)
 {
-    g_builder->start(build_options, create_console_window);
+    _DOL_GetBuilder()->start(build_options, create_console_window);
 }
 
 void DOL_AddSourceDirectory(const char *path)
 {
-    g_builder->addSourceDirectory(path);
+    _DOL_GetBuilder()->addSourceDirectory(path);
 };
 
 
 void DOL_EvalSetCompileOption( const char *options )
 {
-    g_builder->setCompileOption(options);
+    _DOL_GetBuilder()->setCompileOption(options);
 }
 
 void DOL_EvalSetGlobalContext(const char *source)
 {
-    g_builder->setGlobalEvalContext(source);
+    _DOL_GetBuilder()->setGlobalEvalContext(source);
 };
 
 void* _DOL_GetEsp()
@@ -1261,14 +1268,14 @@ void* _DOL_GetEsp()
 
 void _DOL_Eval(const char *file, int line, const char *function, void *esp, const char *source)
 {
-    std::string objfile = g_builder->compileEvalBlock(file, line, function, esp, source);
+    std::string objfile = _DOL_GetBuilder()->compileEvalBlock(file, line, function, esp, source);
     if(objfile.empty()) {
         istPrint("DOL warning: DOL_Eval() failed.\n");
         return;
     }
 
     typedef void (*evalf)();
-    ObjFile *obj = new ObjFile(g_objloader);
+    ObjFile *obj = new ObjFile(_DOL_GetLoader());
     obj->load(objfile.c_str());
     unlink(objfile.c_str());
     obj->link();
