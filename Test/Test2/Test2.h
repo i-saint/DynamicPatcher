@@ -1,4 +1,8 @@
-﻿#include <windows.h>
+﻿// created by i-saint
+// distributed under Creative Commons Attribution (CC BY) license.
+// https://github.com/i-saint/DynamicObjLoader
+
+#include <windows.h>
 #include <d3d11.h>
 #include <d3dx11.h>
 #include <d3dcompiler.h>

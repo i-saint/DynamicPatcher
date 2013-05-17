@@ -1,5 +1,9 @@
-﻿#ifndef __Test_h__
-#define __Test_h__
+﻿// created by i-saint
+// distributed under Creative Commons Attribution (CC BY) license.
+// https://github.com/i-saint/DynamicObjLoader
+
+#ifndef Test1_h
+#define Test1_h
 
 
 class DOL_Fixate IHoge
@@ -16,4 +20,4 @@ public:
     DOL_DeclareMemberFunction(int, MemFnTest, (int));
 };
 
-#endif // __Test_h__
+#endif // Test1_h

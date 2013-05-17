@@ -1,4 +1,8 @@
-﻿#include "stdafx.h"
+﻿// created by i-saint
+// distributed under Creative Commons Attribution (CC BY) license.
+// https://github.com/i-saint/DynamicObjLoader
+
+#include "stdafx.h"
 #include <windows.h>
 #include "DynamicObjLoader.h"
 #include "Test1.h"

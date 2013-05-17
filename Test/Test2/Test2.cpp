@@ -1,4 +1,8 @@
-﻿#pragma warning( disable : 4996 ) // _s じゃない CRT 関数使うと出るやつ
+﻿// created by i-saint
+// distributed under Creative Commons Attribution (CC BY) license.
+// https://github.com/i-saint/DynamicObjLoader
+
+#pragma warning( disable : 4996 ) // _s じゃない CRT 関数使うと出るやつ
 
 #include "Test2.h"
 

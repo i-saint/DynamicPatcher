@@ -1,4 +1,8 @@
-﻿#include "DynamicObjLoader.h"
+﻿// created by i-saint
+// distributed under Creative Commons Attribution (CC BY) license.
+// https://github.com/i-saint/DynamicObjLoader
+
+#include "DynamicObjLoader.h"
 #ifndef DOL_StaticLink
 
 #define _NO_CVCONST_H

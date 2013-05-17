@@ -1,4 +1,8 @@
-﻿// .obj ファイルを実行時にロード＆リンクして実行可能にします。
+﻿// created by i-saint
+// distributed under Creative Commons Attribution (CC BY) license.
+// https://github.com/i-saint/DynamicObjLoader
+
+// .obj ファイルを実行時にロード＆リンクして実行可能にします。
 // 具体的な使い方はテストを参照。
 // DOL_StaticLink を define すると全て通常通り static link されるので、
 // 開発用ビルド構成でのみ .obj ロードを使う、という使い方が可能です。
@@ -24,8 +28,8 @@
 //      デストラクタは atexit() に登録されるため、.obj リロードで終了時クラッシュを招く。なので意図的に対応していない。
 //      DOL_OnLoad / DOL_OnUnload で代替する想定。
 
-#ifndef __DynamicObjLoader_h__
-#define __DynamicObjLoader_h__
+#ifndef DynamicObjLoader_h
+#define DynamicObjLoader_h
 
 #include <intrin.h>
 
@@ -203,4 +207,4 @@ public:
 
 #endif // DOL_StaticLink
 
-#endif // __DynamicObjLoader_h__
+#endif // DynamicObjLoader_h

@@ -1,12 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClInclude Include="stdafx.h">
-      <Filter>Test1</Filter>
-    </ClInclude>
-    <ClInclude Include="targetver.h">
-      <Filter>Test1</Filter>
-    </ClInclude>
     <ClInclude Include="Test1.h">
       <Filter>Test1</Filter>
     </ClInclude>
@@ -15,9 +9,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="stdafx.cpp">
-      <Filter>Test1</Filter>
-    </ClCompile>
     <ClCompile Include="Test1.cpp">
       <Filter>Test1</Filter>
     </ClCompile>
