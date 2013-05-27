@@ -11,6 +11,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <algorithm>
 
 #define dpDLLExport __declspec(dllexport)
 #define dpDLLImport __declspec(dllimport)
@@ -52,12 +53,12 @@ inline bool operator< (const dpSymbol &a, const dpSymbol &b) { return strcmp(a.n
 inline bool operator==(const dpSymbol &a, const dpSymbol &b) { return strcmp(a.name, b.name)==0; }
 
 struct dpPatch {
-    const char *name;
+    dpSymbol symbol;
     void *orig;
     void *patch;
 };
-inline bool operator< (const dpPatch &a, const dpPatch &b) { return strcmp(a.name, b.name)<0; }
-inline bool operator==(const dpPatch &a, const dpPatch &b) { return strcmp(a.name, b.name)==0; }
+inline bool operator< (const dpPatch &a, const dpPatch &b) { return strcmp(a.symbol.name, b.symbol.name)<0; }
+inline bool operator==(const dpPatch &a, const dpPatch &b) { return strcmp(a.symbol.name, b.symbol.name)==0; }
 
 class dpSymbolTable
 {
@@ -101,6 +102,18 @@ public:
     virtual const char*          getPath() const=0;
     virtual dpTime               getLastModifiedTime() const=0;
     virtual dpFileType           getFileType() const=0;
+
+    // F: [](const char *name, void *address)
+    template<class F>
+    void eachSymbols(const F &f)
+    {
+        const dpSymbolTable& st = getSymbolTable();
+        size_t num = st.getNumSymbols();
+        for(size_t i=0; i<num; ++i) {
+            const dpSymbol *sym = st.getSymbol(i);
+            f(sym->name, sym->address);
+        }
+    }
 };
 
 class dpObjFile : public dpBinary
@@ -190,12 +203,14 @@ private:
 class dpLoader
 {
 public:
+    dpAPI static bool findHostSymbolByName(const char *name, dpSymbol &sym);
+    dpAPI static bool findHostSymbolByAddress(void *addr, dpSymbol &sym);
+
     dpLoader();
     ~dpLoader();
 
     dpAPI void      release();
     dpAPI dpBinary* loadBinary(const char *path); // path to .obj, .lib, .dll, .exe
-    dpAPI void*     findHostSymbol(const char *name);
     dpAPI void*     findLoadedSymbol(const char *name);
 
     dpAPI size_t    getNumBinaries() const;
@@ -224,10 +239,22 @@ public:
     dpPatcher();
     ~dpPatcher();
     dpAPI void  release();
-    dpAPI void* patch(dpBinary *obj, const char *filter_regex);
-    dpAPI void* patch(const char *symbol_name, void *replacement_symbol);
-    dpAPI bool  unpatch(const char *symbol_name);
+    dpAPI void* patchByBinary(dpBinary *obj, const char *filter_regex);
+    dpAPI void* patchByName(const char *symbol_name, void *replacement_symbol);
+    dpAPI void* patchByAddress(void *symbol_addr, void *replacement_symbol);
+    dpAPI bool  unpatchByBinary(dpBinary *obj);
+    dpAPI bool  unpatchByName(const char *symbol_name);
+    dpAPI bool  unpatchByAddress(void *symbol_addr);
     dpAPI void  unpatchAll();
+
+    dpAPI dpPatch* findPatchByName(const char *name);
+    dpAPI dpPatch* findPatchByAddress(void *addr);
+
+    template<class F>
+    void eachPatches(const F &f)
+    {
+        std::for_each(m_patchers.begin(), m_patchers.end(), f);
+    }
 
 private:
     typedef std::vector<dpPatch> patch_cont;

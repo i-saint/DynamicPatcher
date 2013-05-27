@@ -3,7 +3,19 @@
 // https://github.com/i-saint/DynamicObjLoader
 
 #include "DynamicPatcher.h"
-#include <algorithm>
+
+
+bool dpLoader::findHostSymbolByName(const char *name, dpSymbol &sym)
+{
+    // todo
+    return false;
+}
+
+bool dpLoader::findHostSymbolByAddress(void *addr, dpSymbol &sym)
+{
+    // todo
+    return false;
+}
 
 
 dpLoader::dpLoader()
@@ -14,9 +26,9 @@ dpLoader::~dpLoader()
 {
 }
 
-void      dpLoader::release()
+void dpLoader::release()
 {
-
+    delete this;
 }
 
 dpBinary* dpLoader::loadBinary(const char *path)
@@ -45,12 +57,6 @@ dpBinary* dpLoader::loadBinary(const char *path)
         }
     }
     return ret;
-}
-
-void* dpLoader::findHostSymbol(const char *name)
-{
-    // todo
-    return nullptr;
 }
 
 void* dpLoader::findLoadedSymbol(const char *name)

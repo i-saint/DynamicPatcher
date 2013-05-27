@@ -3,7 +3,6 @@
 // https://github.com/i-saint/DynamicObjLoader
 
 #include "DynamicPatcher.h"
-#include <algorithm>
 
 void dpSymbolTable::addSymbol(const char *name, void *address)
 {
