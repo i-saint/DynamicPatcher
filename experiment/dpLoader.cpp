@@ -24,11 +24,18 @@ dpLoader::dpLoader()
 
 dpLoader::~dpLoader()
 {
+    eachBinaries([](dpBinary *bin){ delete bin; });
+    m_binaries.clear();
 }
 
-void dpLoader::release()
+void dpLoader::update()
 {
-    delete this;
+    // todo
+}
+
+void dpLoader::addOnLoadList(dpBinary *bin)
+{
+    m_onload_queue.push_back(bin);
 }
 
 dpBinary* dpLoader::loadBinary(const char *path)
@@ -52,7 +59,7 @@ dpBinary* dpLoader::loadBinary(const char *path)
             m_binaries.push_back(ret);
         }
         else {
-            ret->release();
+            delete ret;
             ret = nullptr;
         }
     }

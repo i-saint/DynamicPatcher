@@ -12,11 +12,6 @@ dpBuilder::~dpBuilder()
 {
 }
 
-void dpBuilder::release()
-{
-    delete this;
-}
-
 void dpBuilder::setConfig()
 {
 

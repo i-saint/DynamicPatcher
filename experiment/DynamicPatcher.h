@@ -52,13 +52,14 @@ struct dpSymbol {
 inline bool operator< (const dpSymbol &a, const dpSymbol &b) { return strcmp(a.name, b.name)<0; }
 inline bool operator==(const dpSymbol &a, const dpSymbol &b) { return strcmp(a.name, b.name)==0; }
 
-struct dpPatch {
+struct dpPatchData {
     dpSymbol symbol;
     void *orig;
-    void *patch;
+    void *hook;
+    size_t size;
 };
-inline bool operator< (const dpPatch &a, const dpPatch &b) { return strcmp(a.symbol.name, b.symbol.name)<0; }
-inline bool operator==(const dpPatch &a, const dpPatch &b) { return strcmp(a.symbol.name, b.symbol.name)==0; }
+inline bool operator< (const dpPatchData &a, const dpPatchData &b) { return strcmp(a.symbol.name, b.symbol.name)<0; }
+inline bool operator==(const dpPatchData &a, const dpPatchData &b) { return strcmp(a.symbol.name, b.symbol.name)==0; }
 
 class dpSymbolTable
 {
@@ -71,14 +72,13 @@ public:
     dpAPI const dpSymbol*   getSymbol(size_t i) const;
     dpAPI void*             findSymbol(const char *name) const;
 
-    // F: [](const char *name, void *address)
+    // F: [](const dpSymbol &sym)
     template<class F>
     void eachSymbols(const F &f)
     {
         size_t num = getNumSymbols();
         for(size_t i=0; i<num; ++i) {
-            const dpSymbol *sym = getSymbol(i);
-            f(sym->name, sym->address);
+            f(*getSymbol(i));
         }
     }
 
@@ -92,7 +92,6 @@ class dpBinary
 {
 public:
     virtual ~dpBinary() {}
-    virtual void release()=0;
     virtual bool loadFile(const char *path)=0;
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime)=0;
     virtual void unload()=0;
@@ -103,15 +102,14 @@ public:
     virtual dpTime               getLastModifiedTime() const=0;
     virtual dpFileType           getFileType() const=0;
 
-    // F: [](const char *name, void *address)
+    // F: [](const dpSymbol &sym)
     template<class F>
     void eachSymbols(const F &f)
     {
         const dpSymbolTable& st = getSymbolTable();
         size_t num = st.getNumSymbols();
         for(size_t i=0; i<num; ++i) {
-            const dpSymbol *sym = st.getSymbol(i);
-            f(sym->name, sym->address);
+            f(*st.getSymbol(i));
         }
     }
 };
@@ -121,7 +119,6 @@ class dpObjFile : public dpBinary
 public:
     dpObjFile();
     ~dpObjFile();
-    virtual void release();
     virtual bool loadFile(const char *path);
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime);
     virtual void unload();
@@ -150,7 +147,6 @@ class dpLibFile : public dpBinary
 public:
     dpLibFile();
     ~dpLibFile();
-    virtual void release();
     virtual bool loadFile(const char *path);
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime);
     virtual void unload();
@@ -162,6 +158,7 @@ public:
     virtual dpFileType           getFileType() const;
     dpAPI size_t                 getNumObjFiles() const;
     dpAPI dpObjFile*             getObjFile(size_t index);
+    dpAPI dpObjFile*             findObjFile(const char *name);
 
     template<class F>
     void eachObjs(const F &f) { std::for_each(m_objs.begin(), m_objs.end(), f); }
@@ -180,7 +177,6 @@ class dpDllFile : public dpBinary
 public:
     dpDllFile();
     ~dpDllFile();
-    virtual void release();
     virtual bool loadFile(const char *path);
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime);
     virtual void unload();
@@ -209,7 +205,6 @@ public:
     dpLoader();
     ~dpLoader();
 
-    dpAPI void      release();
     dpAPI dpBinary* loadBinary(const char *path); // path to .obj, .lib, .dll, .exe
     dpAPI void*     findLoadedSymbol(const char *name);
 
@@ -227,37 +222,43 @@ public:
         }
     }
 
+    void update();
+    void addOnLoadList(dpBinary *bin);
+
 private:
     typedef std::vector<dpBinary*> binary_cont;
     binary_cont m_binaries;
+    binary_cont m_onload_queue;
 };
 
 
 class dpPatcher
 {
 public:
+    static void patch(dpPatchData &pi);
+    static void unpatch(dpPatchData &pi);
+
     dpPatcher();
     ~dpPatcher();
-    dpAPI void  release();
     dpAPI void* patchByBinary(dpBinary *obj, const char *filter_regex);
-    dpAPI void* patchByName(const char *symbol_name, void *replacement_symbol);
-    dpAPI void* patchByAddress(void *symbol_addr, void *replacement_symbol);
+    dpAPI void* patchByName(const char *name, void *hook);
+    dpAPI void* patchByAddress(void *addr, void *hook);
     dpAPI bool  unpatchByBinary(dpBinary *obj);
-    dpAPI bool  unpatchByName(const char *symbol_name);
-    dpAPI bool  unpatchByAddress(void *symbol_addr);
+    dpAPI bool  unpatchByName(const char *name);
+    dpAPI bool  unpatchByAddress(void *addr);
     dpAPI void  unpatchAll();
 
-    dpAPI dpPatch* findPatchByName(const char *name);
-    dpAPI dpPatch* findPatchByAddress(void *addr);
+    dpAPI dpPatchData* findPatchByName(const char *name);
+    dpAPI dpPatchData* findPatchByAddress(void *addr);
 
     template<class F>
-    void eachPatches(const F &f)
+    void eachPatchData(const F &f)
     {
         std::for_each(m_patchers.begin(), m_patchers.end(), f);
     }
 
 private:
-    typedef std::vector<dpPatch> patch_cont;
+    typedef std::vector<dpPatchData> patch_cont;
     patch_cont m_patchers;
 };
 
@@ -267,7 +268,6 @@ class dpBuilder
 public:
     dpBuilder();
     ~dpBuilder();
-    dpAPI void release();
     dpAPI void setConfig();
     dpAPI bool startAutoCompile();
     dpAPI bool stopAutoCompile();
@@ -275,8 +275,33 @@ public:
 public:
 };
 
-dpCLinkage dpAPI dpLoader*  dpCreateLoader();
-dpCLinkage dpAPI dpPatcher* dpCreatePatcher();
-dpCLinkage dpAPI dpBuilder* dpCreateBuilder();
+
+class DynamicPatcher
+{
+public:
+    DynamicPatcher();
+    ~DynamicPatcher();
+
+    dpAPI void update();
+
+    dpAPI dpLoader*  getLoader();
+    dpAPI dpPatcher* getPatcher();
+    dpAPI dpBuilder* getBuilder();
+
+private:
+    dpLoader  *m_loader;
+    dpPatcher *m_patcher;
+    dpBuilder *m_builder;
+};
+
+dpCLinkage dpAPI bool            dpInitialize();
+dpCLinkage dpAPI bool            dpFinalize();
+dpCLinkage dpAPI DynamicPatcher* dpGetInstance();
+
+#define dpUpdate()      dpGetInstance()->update()
+
+#define dpGetLoader()   dpGetInstance()->getLoader()
+#define dpGetPatcher()  dpGetInstance()->getPatcher()
+#define dpGetBuilder()  dpGetInstance()->getBuilder()
 
 #endif // DynamicPatcher_h
