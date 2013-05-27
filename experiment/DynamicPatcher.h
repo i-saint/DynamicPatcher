@@ -16,6 +16,12 @@
 #define dpDLLExport __declspec(dllexport)
 #define dpDLLImport __declspec(dllimport)
 
+#ifdef _WIN64
+#   define dpSymPrefix
+#else // _WIN64
+#   define dpSymPrefix "_"
+#endif // _WIN64
+
 #if defined(dpDLLImpl)
 #   define dpAPI dpDLLExport
 #elif defined(dpLinkDynamic)
@@ -61,6 +67,10 @@ struct dpPatchData {
 inline bool operator< (const dpPatchData &a, const dpPatchData &b) { return strcmp(a.symbol.name, b.symbol.name)<0; }
 inline bool operator==(const dpPatchData &a, const dpPatchData &b) { return strcmp(a.symbol.name, b.symbol.name)==0; }
 
+void dpPrint(const char* fmt, ...);
+
+
+
 class dpSymbolTable
 {
 public:
@@ -70,7 +80,7 @@ public:
     void clear();
     dpAPI size_t            getNumSymbols() const;
     dpAPI const dpSymbol*   getSymbol(size_t i) const;
-    dpAPI void*             findSymbol(const char *name) const;
+    dpAPI const dpSymbol*   findSymbol(const char *name) const;
 
     // F: [](const dpSymbol &sym)
     template<class F>
@@ -200,12 +210,13 @@ class dpLoader
 {
 public:
     dpAPI static bool findHostSymbolByName(const char *name, dpSymbol &sym);
-    dpAPI static bool findHostSymbolByAddress(void *addr, dpSymbol &sym);
+    dpAPI static bool findHostSymbolByAddress(void *addr, dpSymbol &sym, char *namebuf, size_t namebuflen);
 
     dpLoader();
     ~dpLoader();
 
     dpAPI dpBinary* loadBinary(const char *path); // path to .obj, .lib, .dll, .exe
+    dpAPI bool      link();
     dpAPI void*     findLoadedSymbol(const char *name);
 
     dpAPI size_t    getNumBinaries() const;
@@ -222,7 +233,6 @@ public:
         }
     }
 
-    void update();
     void addOnLoadList(dpBinary *bin);
 
 private:

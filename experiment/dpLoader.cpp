@@ -4,16 +4,34 @@
 
 #include "DynamicPatcher.h"
 
+void dpCallOnLoadHandler(dpBinary *v);
 
 bool dpLoader::findHostSymbolByName(const char *name, dpSymbol &sym)
 {
-    // todo
-    return false;
+    char buf[sizeof(SYMBOL_INFO)+1024];
+    PSYMBOL_INFO sinfo = (PSYMBOL_INFO)buf;
+    sinfo->SizeOfStruct = sizeof(SYMBOL_INFO);
+    sinfo->MaxNameLen = MAX_PATH;
+    if(::SymFromName(::GetCurrentProcess(), name, sinfo)==FALSE) {
+        return false;
+    }
+    sym.address = (void*)sinfo->Address;
+    sym.name = name;
+    return true;
 }
 
-bool dpLoader::findHostSymbolByAddress(void *addr, dpSymbol &sym)
+bool dpLoader::findHostSymbolByAddress(void *addr, dpSymbol &sym, char *namebuf, size_t namebuflen)
 {
-    // todo
+    char buf[sizeof(SYMBOL_INFO)+MAX_PATH];
+    PSYMBOL_INFO sinfo = (PSYMBOL_INFO)buf;
+    sinfo->SizeOfStruct = sizeof(SYMBOL_INFO);
+    sinfo->MaxNameLen = MAX_PATH;
+    if(::SymFromAddr(::GetCurrentProcess(), (DWORD64)addr, 0, sinfo)==FALSE) {
+        return false;
+    }
+    sym.address = addr;
+    sym.name = namebuf;
+    strncpy(namebuf, sinfo->Name, std::min<size_t>(sinfo->NameLen+1, namebuflen));
     return false;
 }
 
@@ -28,9 +46,32 @@ dpLoader::~dpLoader()
     m_binaries.clear();
 }
 
-void dpLoader::update()
+bool dpLoader::link()
 {
-    // todo
+    if(!m_onload_queue.empty()) {
+        return true;
+    }
+
+    bool ret = true;
+    eachBinaries([&](dpBinary *bin){
+        if(!bin->link()) { ret=false; }
+    });
+
+    if(ret) {
+        dpPrint("dp info: link completed\n");
+    }
+    else {
+        dpPrint("dp fatal: link error\n");
+        ::DebugBreak();
+    }
+
+    // 新規ロードされているオブジェクトに OnLoad があれば呼ぶ
+    for(size_t i=0; i<m_onload_queue.size(); ++i) {
+        dpCallOnLoadHandler(m_onload_queue[i]);
+    }
+    m_onload_queue.clear();
+
+    return ret;
 }
 
 void dpLoader::addOnLoadList(dpBinary *bin)
@@ -71,8 +112,8 @@ void* dpLoader::findLoadedSymbol(const char *name)
     void *ret = nullptr;
     eachBinaries([&](dpBinary *bin){
         if(ret) { return; }
-        if(void *s = bin->getSymbolTable().findSymbol(name)) {
-            ret = s;
+        if(const dpSymbol *s = bin->getSymbolTable().findSymbol(name)) {
+            ret = s->address;
         }
     });
     return ret;

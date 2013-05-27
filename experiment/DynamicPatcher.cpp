@@ -3,6 +3,7 @@
 // https://github.com/i-saint/DynamicObjLoader
 
 #include "DynamicPatcher.h"
+#pragma comment(lib, "dbghelp.lib")
 
 static DynamicPatcher *g_instance;
 
@@ -28,7 +29,7 @@ dpBuilder* DynamicPatcher::getBuilder() { return m_builder; }
 
 dpAPI void DynamicPatcher::update()
 {
-    // todo
+    m_loader->link();
 }
 
 

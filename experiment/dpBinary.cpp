@@ -4,7 +4,9 @@
 
 #include "DynamicPatcher.h"
 
-#define dpPrint(...) dpDebugPrint(__VA_ARGS__)
+const char g_symname_onload[]   = dpSymPrefix "dpOnLoadHandler";
+const char g_symname_onunload[] = dpSymPrefix "dpOnUnloadHandler";
+
 
 template<size_t N>
 inline int dpVSprintf(char (&buf)[N], const char *format, va_list vl)
@@ -13,18 +15,18 @@ inline int dpVSprintf(char (&buf)[N], const char *format, va_list vl)
 }
 
 static const int DPRINTF_MES_LENGTH  = 4096;
-void dpDebugPrintV(const char* fmt, va_list vl)
+void dpPrintV(const char* fmt, va_list vl)
 {
     char buf[DPRINTF_MES_LENGTH];
     dpVSprintf(buf, fmt, vl);
     ::OutputDebugStringA(buf);
 }
 
-void dpDebugPrint(const char* fmt, ...)
+void dpPrint(const char* fmt, ...)
 {
     va_list vl;
     va_start(vl, fmt);
-    dpDebugPrintV(fmt, vl);
+    dpPrintV(fmt, vl);
     va_end(vl);
 }
 
@@ -123,7 +125,10 @@ inline bool operator==(const FILETIME &l, const FILETIME &r)
 
 void* dpResolveExternalSymbol( dpBinary *bin, const char *name )
 {
-    void *sym = bin->getSymbolTable().findSymbol(name);
+    void *sym = nullptr;
+    if(const dpSymbol *s=bin->getSymbolTable().findSymbol(name)) {
+        sym = s->address;
+    }
     if(!sym) {
         sym = dpGetLoader()->findLoadedSymbol(name);
     }
@@ -135,6 +140,24 @@ void* dpResolveExternalSymbol( dpBinary *bin, const char *name )
     }
     return sym;
 }
+
+typedef void (*dpHandler)();
+void dpCallOnLoadHandler(dpBinary *v)
+{
+    if(const dpSymbol *sym = v->getSymbolTable().findSymbol(g_symname_onload)) {
+        ((dpHandler)sym->address)();
+    }
+}
+
+void dpCallOnUnloadHandler(dpBinary *v)
+{
+    if(const dpSymbol *sym = v->getSymbolTable().findSymbol(g_symname_onunload)) {
+        ((dpHandler)sym->address)();
+    }
+}
+
+
+
 
 void dpSymbolTable::addSymbol(const char *name, void *address)
 {
@@ -171,11 +194,11 @@ const dpSymbol* dpSymbolTable::getSymbol(size_t i) const
     return &m_symbols[i];
 }
 
-void* dpSymbolTable::findSymbol(const char *name) const
+const dpSymbol* dpSymbolTable::findSymbol(const char *name) const
 {
     dpSymbol tmp = {name, nullptr};
     auto p = std::lower_bound(m_symbols.begin(), m_symbols.end(), tmp);
-    return p==m_symbols.end() ? nullptr : p->address;
+    return p==m_symbols.end() ? nullptr : &(*p);
 }
 
 
@@ -227,7 +250,7 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
 #else
     if( pDosHeader->e_magic!=IMAGE_FILE_MACHINE_I386 || pDosHeader->e_sp!=0 ) {
 #endif
-        dpPrint("DOL fatal: %s 認識できないフォーマットです。/GL (プログラム全体の最適化) 有効でコンパイルされている可能性があります。\n"
+        dpPrint("dp fatal: %s 認識できないフォーマットです。/GL (プログラム全体の最適化) 有効でコンパイルされている可能性があります。\n"
             , m_path.c_str());
         ::DebugBreak();
         return false;
@@ -321,7 +344,7 @@ bool dpObjFile::link()
             size_t rdata = (size_t)dpResolveExternalSymbol(this, rname);
             if(rdata==NULL) {
                 char buf[1024];
-                _snprintf(buf, _countof(buf), "DOL fatal: %s が参照するシンボル %s を解決できませんでした。\n", m_path.c_str(), rname);
+                _snprintf(buf, _countof(buf), "dp fatal: %s が参照するシンボル %s を解決できませんでした。\n", m_path.c_str(), rname);
                 mes += buf;
                 ret = false;
                 continue;
@@ -378,7 +401,7 @@ bool dpObjFile::link()
                 break;
 #endif // _WIN64
             default:
-                dpPrint("DOL warning: 未知の IMAGE_RELOCATION::Type 0x%x\n", pReloc->Type);
+                dpPrint("dp warning: 未知の IMAGE_RELOCATION::Type 0x%x\n", pReloc->Type);
                 break;
             }
         }
@@ -395,6 +418,7 @@ bool dpObjFile::link()
 
 void dpObjFile::unload()
 {
+    dpCallOnUnloadHandler(this);
     if(m_data!=NULL) {
         ::VirtualFree(m_data, m_size, MEM_RELEASE);
         m_data = NULL;

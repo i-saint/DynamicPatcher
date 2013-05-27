@@ -145,7 +145,8 @@ void* dpPatcher::patchByName(const char *symbol_name, void *hook)
 void* dpPatcher::patchByAddress(void *symbol_addr, void *hook)
 {
     dpSymbol sym;
-    if(dpLoader::findHostSymbolByAddress(symbol_addr, sym)) {
+    char buf[1024];
+    if(dpLoader::findHostSymbolByAddress(symbol_addr, sym, buf, sizeof(buf))) {
         unpatchByAddress(sym.address);
         dpPatchData pi = {sym, nullptr, hook, 0};
         patch(pi);
