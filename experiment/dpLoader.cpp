@@ -55,7 +55,7 @@ dpBinary* dpLoader::loadBinary(const char *path)
     }
 
     if(ret) {
-        if(ret->loadFile(path) && ret->link(this)) {
+        if(ret->loadFile(path)) {
             m_binaries.push_back(ret);
         }
         else {

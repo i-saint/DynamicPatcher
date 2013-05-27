@@ -95,7 +95,7 @@ public:
     virtual bool loadFile(const char *path)=0;
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime)=0;
     virtual void unload()=0;
-    virtual bool link(dpLoader *linker)=0;
+    virtual bool link()=0;
 
     virtual const dpSymbolTable& getSymbolTable() const=0;
     virtual const char*          getPath() const=0;
@@ -122,7 +122,7 @@ public:
     virtual bool loadFile(const char *path);
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime);
     virtual void unload();
-    virtual bool link(dpLoader *linker);
+    virtual bool link();
 
     virtual const dpSymbolTable& getSymbolTable() const;
     virtual const char*          getPath() const;
@@ -150,7 +150,7 @@ public:
     virtual bool loadFile(const char *path);
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime);
     virtual void unload();
-    virtual bool link(dpLoader *linker);
+    virtual bool link();
 
     virtual const dpSymbolTable& getSymbolTable() const;
     virtual const char*          getPath() const;
@@ -180,7 +180,7 @@ public:
     virtual bool loadFile(const char *path);
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime);
     virtual void unload();
-    virtual bool link(dpLoader *linker);
+    virtual bool link();
 
     virtual const dpSymbolTable& getSymbolTable() const;
     virtual const char*          getPath() const;
