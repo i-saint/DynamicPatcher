@@ -245,9 +245,6 @@ private:
 class dpPatcher
 {
 public:
-    static void patch(dpPatchData &pi);
-    static void unpatch(dpPatchData &pi);
-
     dpPatcher();
     ~dpPatcher();
     dpAPI void* patchByBinary(dpBinary *obj, const char *filter_regex);
@@ -278,11 +275,30 @@ class dpBuilder
 public:
     dpBuilder();
     ~dpBuilder();
-    dpAPI void setConfig();
-    dpAPI bool startAutoCompile();
+    dpAPI void addLoadPath(const char *path);
+    dpAPI void addSourcePath(const char *path);
+    dpAPI bool startAutoCompile(const char *build_options, bool create_console);
     dpAPI bool stopAutoCompile();
 
-public:
+    void update();
+    void watchFiles();
+    bool build();
+
+private:
+    struct SourcePath
+    {
+        std::string path;
+        HANDLE notifier;
+    };
+    std::string m_vcvars;
+    std::string m_msbuild;
+    std::string m_msbuild_option;
+    std::vector<SourcePath> m_srcpathes;
+    std::vector<std::string> m_loadpathes;
+    bool m_create_console;
+    mutable bool m_build_done;
+    bool m_flag_exit;
+    HANDLE m_thread_watchfile;
 };
 
 
@@ -304,14 +320,27 @@ private:
     dpBuilder *m_builder;
 };
 
-dpCLinkage dpAPI bool            dpInitialize();
-dpCLinkage dpAPI bool            dpFinalize();
 dpCLinkage dpAPI DynamicPatcher* dpGetInstance();
-
-#define dpUpdate()      dpGetInstance()->update()
-
 #define dpGetLoader()   dpGetInstance()->getLoader()
 #define dpGetPatcher()  dpGetInstance()->getPatcher()
 #define dpGetBuilder()  dpGetInstance()->getBuilder()
+
+
+
+dpCLinkage dpAPI bool   dpInitialize();
+dpCLinkage dpAPI bool   dpFinalize();
+
+dpCLinkage dpAPI dpBinary* dpLoad(const char *path); // path to .obj .lib .dll .exe or directory
+dpCLinkage dpAPI bool      dpLink();
+
+dpCLinkage dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex);
+dpCLinkage dpAPI bool   dpPatchByName(const char *symbol_name);
+dpCLinkage dpAPI bool   dpPatchByAddress(void *target, const char *symbol_name);
+
+dpCLinkage dpAPI void   dpAutoCompileAddLoadPath(const char *path);
+dpCLinkage dpAPI void   dpAutoCompileAddSourcePath(const char *path);
+dpCLinkage dpAPI bool   dpAutoCompileStart(const char *option, bool console);
+dpCLinkage dpAPI bool   dpAutoCompileStop();
+dpCLinkage dpAPI void   dpUpdate();
 
 #endif // DynamicPatcher_h

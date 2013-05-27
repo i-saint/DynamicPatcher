@@ -77,7 +77,7 @@ size_t CopyInstructions(void *dst_, const void *src_, size_t required)
     return ret;
 }
 
-void dpPatcher::patch(dpPatchData &pi)
+void dpPatch(dpPatchData &pi)
 {
     // 元コードの退避先
     BYTE *preserved = (BYTE*)::VirtualAlloc(NULL, 32, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
@@ -99,7 +99,7 @@ void dpPatcher::patch(dpPatchData &pi)
     pi.size = slice;
 }
 
-void dpPatcher::unpatch(dpPatchData &pi)
+void dpUnpatch(dpPatchData &pi)
 {
     DWORD old;
     ::VirtualProtect(pi.symbol.address, 32, PAGE_EXECUTE_READWRITE, &old);
@@ -135,7 +135,7 @@ void* dpPatcher::patchByName(const char *symbol_name, void *hook)
     if(dpLoader::findHostSymbolByName(symbol_name, sym)) {
         unpatchByAddress(sym.address);
         dpPatchData pi = {sym, nullptr, hook, 0};
-        patch(pi);
+        dpPatch(pi);
         m_patchers.push_back(pi);
         return pi.orig;
     }
@@ -149,7 +149,7 @@ void* dpPatcher::patchByAddress(void *symbol_addr, void *hook)
     if(dpLoader::findHostSymbolByAddress(symbol_addr, sym, buf, sizeof(buf))) {
         unpatchByAddress(sym.address);
         dpPatchData pi = {sym, nullptr, hook, 0};
-        patch(pi);
+        dpPatch(pi);
         m_patchers.push_back(pi);
         return pi.orig;
     }
@@ -167,7 +167,7 @@ bool dpPatcher::unpatchByBinary(dpBinary *obj)
 bool dpPatcher::unpatchByName(const char *name)
 {
     if(dpPatchData *p = findPatchByName(name)) {
-        unpatch(*p);
+        dpUnpatch(*p);
         m_patchers.erase(m_patchers.begin()+std::distance(&m_patchers[0], p));
         return true;
     }
@@ -177,7 +177,7 @@ bool dpPatcher::unpatchByName(const char *name)
 bool dpPatcher::unpatchByAddress(void *addr)
 {
     if(dpPatchData *p = findPatchByAddress(addr)) {
-        unpatch(*p);
+        dpUnpatch(*p);
         m_patchers.erase(m_patchers.begin()+std::distance(&m_patchers[0], p));
         return true;
     }
@@ -186,7 +186,7 @@ bool dpPatcher::unpatchByAddress(void *addr)
 
 void dpPatcher::unpatchAll()
 {
-    eachPatchData([&](dpPatchData &p){ unpatch(p); });
+    eachPatchData([&](dpPatchData &p){ dpUnpatch(p); });
     m_patchers.clear();
 }
 
