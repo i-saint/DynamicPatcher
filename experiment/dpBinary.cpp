@@ -157,6 +157,12 @@ void dpCallOnUnloadHandler(dpBinary *v)
     }
 }
 
+bool dpDemangle(const char *mangled, char *demangled, size_t buflen)
+{
+    return ::UnDecorateSymbolName(mangled, demangled, buflen, UNDNAME_COMPLETE)!=0;
+}
+
+
 
 
 

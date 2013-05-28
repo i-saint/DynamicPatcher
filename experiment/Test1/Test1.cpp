@@ -43,19 +43,25 @@ public:
 
     virtual void doSomething()
     {
-        puts("Test::print()");
+        puts("Test::doSomething()");
+        printf("Test::s_value: %d\n", s_value);
     }
 
     bool getEndFlag() const { return m_end_flag; }
 
 private:
+    static int s_value;
     bool m_end_flag;
 };
+int Test::s_value = 100;
+
 
 dpOnLoad(
     dpPatchByAddress(&puts, &puts_hook);
-    //dpPatchByFile("_tmp/Test1_Win32Debug/Test1.obj", ".*Test.*");
+    dpPatchByFile(dpObjDir"/Test1.obj", ".*Test.*");
 )
+
+
 
 int main(int argc, char *argv[])
 {

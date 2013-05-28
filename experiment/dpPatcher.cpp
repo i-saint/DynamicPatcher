@@ -99,11 +99,10 @@ dpPatcher::~dpPatcher()
     unpatchAll();
 }
 
-void* dpPatcher::patchByBinary(dpBinary *obj, const char *filter_regex)
+void* dpPatcher::patchByBinary(dpBinary *obj, const std::function<bool (const char *symname)> &condition)
 {
-    std::regex reg(filter_regex);
     obj->eachSymbols([&](const dpSymbol &sym){
-        if(std::regex_search(sym.name, reg)) {
+        if(condition(sym.name)) {
             patchByName(sym.name, sym.address);
         }
     });
@@ -118,6 +117,11 @@ void* dpPatcher::patchByName(const char *symbol_name, void *hook)
         dpPatchData pi = {sym, nullptr, hook, 0};
         dpPatch(pi);
         m_patchers.push_back(pi);
+        {
+            char demangled[1024];
+            dpDemangle(sym.name, demangled, sizeof(demangled));
+            dpPrint("dp info: patching %s (%s) succeeded.\n", sym.name, demangled);
+        }
         return pi.orig;
     }
     return nullptr;
@@ -132,6 +136,11 @@ void* dpPatcher::patchByAddress(void *symbol_addr, void *hook)
         dpPatchData pi = {sym, nullptr, hook, 0};
         dpPatch(pi);
         m_patchers.push_back(pi);
+        {
+            char demangled[1024];
+            dpDemangle(sym.name, demangled, sizeof(demangled));
+            dpPrint("dp info: patching %s (%s) succeeded.\n", sym.name, demangled);
+        }
         return pi.orig;
     }
     return nullptr;

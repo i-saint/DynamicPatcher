@@ -3,6 +3,7 @@
 // https://github.com/i-saint/DynamicObjLoader
 
 #include "DynamicPatcher.h"
+#include <regex>
 #pragma comment(lib, "dbghelp.lib")
 
 static DynamicPatcher *g_instance;
@@ -35,13 +36,13 @@ void DynamicPatcher::update()
     m_loader->link();
 }
 
-dpCLinkage dpAPI DynamicPatcher* dpGetInstance()
+dpAPI DynamicPatcher* dpGetInstance()
 {
     return g_instance;
 }
 
 
-dpCLinkage dpAPI bool dpInitialize()
+dpAPI bool dpInitialize()
 {
     if(!g_instance) {
         new DynamicPatcher();
@@ -50,7 +51,7 @@ dpCLinkage dpAPI bool dpInitialize()
     return false;
 }
 
-dpCLinkage dpAPI bool dpFinalize()
+dpAPI bool dpFinalize()
 {
     if(g_instance) {
         delete g_instance;
@@ -60,48 +61,56 @@ dpCLinkage dpAPI bool dpFinalize()
 }
 
 
-dpCLinkage dpAPI dpBinary* dpLoad(const char *path)
+dpAPI dpBinary* dpLoad(const char *path)
 {
     return dpGetLoader()->loadBinary(path);
 }
 
-dpCLinkage dpAPI bool dpLink()
+dpAPI bool dpLink()
 {
     return dpGetLoader()->link();
 }
 
-dpCLinkage dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex)
+dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex)
 {
     if(dpBinary *bin=dpGetLoader()->findBinary(filename)) {
-        dpGetPatcher()->patchByBinary(bin, filter_regex);
+        std::regex reg(filter_regex);
+        dpGetPatcher()->patchByBinary(bin, [&](const char *name){ return std::regex_search(name, reg); });
         return true;
     }
     return false;
 }
 
-dpCLinkage dpAPI bool dpPatchByName(const char *name)
+dpAPI size_t dpPatchByFile(const char *filename, const std::function<bool (const char *symname)> &condition)
+{
+    if(dpBinary *bin=dpGetLoader()->findBinary(filename)) {
+        dpGetPatcher()->patchByBinary(bin, condition);
+        return true;
+    }
+    return false;
+}
+
+dpAPI bool dpPatchByName(const char *name)
 {
     dpSymbol sym;
     if(dpGetLoader()->findHostSymbolByName(name, sym)) {
         if(void *hook=dpGetLoader()->findLoadedSymbol(sym.name)) {
             dpGetPatcher()->patchByAddress(sym.address, hook);
-            dpPrint("dp info: patching %s succeeded.\n", sym.name);
             return true;
         }
     }
     return false;
 }
 
-dpCLinkage dpAPI bool dpPatchByAddress(void *target, void *hook)
+dpAPI bool dpPatchByAddress(void *target, void *hook)
 {
     if(dpGetPatcher()->patchByAddress(target, hook)) {
-        dpPrint("dp info: patching 0x%p succeeded.\n", target);
         return true;
     }
     return false;
 }
 
-dpCLinkage dpAPI void* dpGetUnpatchedFunction( void *target )
+dpAPI void* dpGetUnpatchedFunction( void *target )
 {
     if(dpPatchData *pd = dpGetPatcher()->findPatchByAddress(target)) {
         return pd->orig;
@@ -110,27 +119,27 @@ dpCLinkage dpAPI void* dpGetUnpatchedFunction( void *target )
 }
 
 
-dpCLinkage dpAPI void dpAddLoadPath(const char *path)
+dpAPI void dpAddLoadPath(const char *path)
 {
     dpGetBuilder()->addLoadPath(path);
 }
 
-dpCLinkage dpAPI void dpAddSourcePath(const char *path)
+dpAPI void dpAddSourcePath(const char *path)
 {
     dpGetBuilder()->addSourcePath(path);
 }
 
-dpCLinkage dpAPI bool dpStartAutoCompile(const char *option, bool console)
+dpAPI bool dpStartAutoCompile(const char *option, bool console)
 {
     return dpGetBuilder()->startAutoCompile(option, console);
 }
 
-dpCLinkage dpAPI bool dpStopAutoCompile()
+dpAPI bool dpStopAutoCompile()
 {
     return dpGetBuilder()->stopAutoCompile();
 }
 
-dpCLinkage dpAPI void dpUpdate()
+dpAPI void dpUpdate()
 {
     dpGetInstance()->update();
 }

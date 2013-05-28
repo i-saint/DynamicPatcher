@@ -12,6 +12,7 @@
 #include <string>
 #include <map>
 #include <algorithm>
+#include <functional>
 
 #define dpDLLExport __declspec(dllexport)
 #define dpDLLImport __declspec(dllimport)
@@ -81,6 +82,7 @@ inline bool operator==(const dpPatchData &a, const dpPatchData &b) { return strc
 void dpPrint(const char* fmt, ...);
 void* dpAllocate(size_t size, void *location);
 dpTime dpGetFileModifiedTime(const char *path);
+bool dpDemangle(const char *mangled, char *demangled, size_t buflen);
 
 
 
@@ -260,7 +262,7 @@ class dpPatcher
 public:
     dpPatcher();
     ~dpPatcher();
-    dpAPI void* patchByBinary(dpBinary *obj, const char *filter_regex);
+    dpAPI void* patchByBinary(dpBinary *obj, const std::function<bool (const char *symname)> &condition);
     dpAPI void* patchByName(const char *name, void *hook);
     dpAPI void* patchByAddress(void *addr, void *hook);
     dpAPI bool  unpatchByBinary(dpBinary *obj);
@@ -333,28 +335,29 @@ private:
     dpBuilder *m_builder;
 };
 
-dpCLinkage dpAPI DynamicPatcher* dpGetInstance();
+dpAPI DynamicPatcher* dpGetInstance();
 #define dpGetLoader()   dpGetInstance()->getLoader()
 #define dpGetPatcher()  dpGetInstance()->getPatcher()
 #define dpGetBuilder()  dpGetInstance()->getBuilder()
 
 
 
-dpCLinkage dpAPI bool   dpInitialize();
-dpCLinkage dpAPI bool   dpFinalize();
+dpAPI bool   dpInitialize();
+dpAPI bool   dpFinalize();
 
-dpCLinkage dpAPI dpBinary* dpLoad(const char *path); // path to .obj .lib .dll .exe or directory
-dpCLinkage dpAPI bool      dpLink();
+dpAPI dpBinary* dpLoad(const char *path); // path to .obj .lib .dll .exe or directory
+dpAPI bool      dpLink();
 
-dpCLinkage dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex);
-dpCLinkage dpAPI bool   dpPatchByName(const char *symbol_name);
-dpCLinkage dpAPI bool   dpPatchByAddress(void *target, void *hook);
-dpCLinkage dpAPI void*  dpGetUnpatchedFunction(void *target);
+dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex);
+dpAPI size_t dpPatchByFile(const char *filename, const std::function<bool (const char *symname)> &condition);
+dpAPI bool   dpPatchByName(const char *symbol_name);
+dpAPI bool   dpPatchByAddress(void *target, void *hook);
+dpAPI void*  dpGetUnpatchedFunction(void *target);
 
-dpCLinkage dpAPI void   dpAddLoadPath(const char *path);
-dpCLinkage dpAPI void   dpAddSourcePath(const char *path);
-dpCLinkage dpAPI bool   dpStartAutoCompile(const char *option, bool console);
-dpCLinkage dpAPI bool   dpStopAutoCompile();
-dpCLinkage dpAPI void   dpUpdate();
+dpAPI void   dpAddLoadPath(const char *path);
+dpAPI void   dpAddSourcePath(const char *path);
+dpAPI bool   dpStartAutoCompile(const char *option, bool console);
+dpAPI bool   dpStopAutoCompile();
+dpAPI void   dpUpdate();
 
 #endif // DynamicPatcher_h
