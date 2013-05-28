@@ -84,8 +84,13 @@ dpBinary* dpLoader::loadBinary(const char *path)
     size_t len = strlen(path);
     if(len < 4) { return nullptr; }
 
-    dpBinary *ret = findBinary(path);
-    bool needs_add = false;
+    dpBinary *old = findBinary(path);
+    if(old) {
+        dpTime t = dpGetFileModifiedTime(path);
+        if(t<=old->getLastModifiedTime()) { return old; }
+    }
+
+    dpBinary *ret = nullptr;
     if(!ret) {
         if(_stricmp(&path[len-4], ".obj")==0) {
             ret = new dpObjFile();
@@ -100,19 +105,16 @@ dpBinary* dpLoader::loadBinary(const char *path)
             dpPrint("dp error: unsupported file %s\n", path);
             return nullptr;
         }
-        needs_add = true;
     }
 
     if(ret->loadFile(path)) {
-        if(needs_add) {
-            m_binaries.push_back(ret);
+        if(old) {
+            m_binaries.erase(std::find(m_binaries.begin(), m_binaries.end(), old));
+            delete old;
         }
+        m_binaries.push_back(ret);
     }
     else {
-        auto i = std::find(m_binaries.begin(), m_binaries.end(), ret);
-        if(i!=m_binaries.end()) {
-            m_binaries.erase(i);
-        }
         delete ret;
         ret = nullptr;
     }

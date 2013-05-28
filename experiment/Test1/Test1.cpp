@@ -12,6 +12,21 @@
 #define dpLinkDynamic
 #include "../DynamicPatcher.h"
 
+
+#ifdef _WIN64
+#   define dpPlatform "x64"
+#else
+#   define dpPlatform "Win32"
+#endif
+#ifdef _DEBUG
+#   define dpConfiguration "Debug"
+#else
+#   define dpConfiguration "Release"
+#endif
+#define dpObjDir "_tmp/Test1_" dpPlatform dpConfiguration 
+
+
+
 int puts_hook(const char *s)
 {
     typedef int (*puts_t)(const char *s);
@@ -44,29 +59,16 @@ dpOnLoad(
 
 int main(int argc, char *argv[])
 {
-#ifdef _WIN64
-#   define Platform "x64"
-#else
-#   define Platform "Win32"
-#endif
-#ifdef _DEBUG
-#   define Configuration "Debug"
-#else
-#   define Configuration "Release"
-#endif
-#define ObjDir "_tmp/Test1_" Platform Configuration 
-
     dpInitialize();
-    dpAddLoadPath(ObjDir "/Test1.obj");
+    dpAddLoadPath(dpObjDir"/Test1.obj");
     dpAddSourcePath(".");
+    dpStartAutoCompile("Test1.vcxproj /target:ClCompile /m /p:Configuration="dpConfiguration";Platform="dpPlatform, false);
 
     printf("DynamicPatcher Test1\n");
     {
         Test test;
         while(!test.getEndFlag()) {
             test.doSomething();
-            dpLoad(ObjDir "/Test1.obj");
-            dpLink();
 
             ::Sleep(1000);
             dpUpdate();

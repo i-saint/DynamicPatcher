@@ -63,7 +63,9 @@ void dpBuilder::addLoadPath(const char *path)
 
 void dpBuilder::addSourcePath(const char *path)
 {
-    SourcePath sd = {path, NULL};
+    char fullpath[MAX_PATH];
+    ::GetFullPathNameA(path, MAX_PATH, fullpath, nullptr);
+    SourcePath sd = {fullpath, NULL};
     m_srcpathes.push_back(sd);
 }
 
@@ -158,7 +160,30 @@ void dpBuilder::update()
     if(m_build_done) {
         m_build_done = false;
 
-        // todo load
+        size_t num_loaded = 0;
+        for(size_t i=0; i<m_loadpathes.size(); ++i) {
+            const std::string &path = m_loadpathes[i];
+            std::string dir;
+            size_t dir_len=0;
+            for(size_t l=0; l<path.size(); ++l) {
+                if(path[l]=='\\' || path[l]=='/') { dir_len=l+1; }
+            }
+            dir.insert(dir.end(), path.begin(), path.begin()+dir_len);
+
+            WIN32_FIND_DATAA wfdata;
+            HANDLE handle = ::FindFirstFileA(path.c_str(), &wfdata);
+            if(handle!=INVALID_HANDLE_VALUE) {
+                do {
+                    if(dpGetLoader()->loadBinary((dir+wfdata.cFileName).c_str())) {
+                        ++num_loaded;
+                    }
+                } while(::FindNextFileA(handle, &wfdata));
+                ::FindClose(handle);
+            }
+        }
+        if(num_loaded) {
+            dpGetLoader()->link();
+        }
     }
 }
 

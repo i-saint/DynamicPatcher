@@ -80,6 +80,7 @@ inline bool operator==(const dpPatchData &a, const dpPatchData &b) { return strc
 
 void dpPrint(const char* fmt, ...);
 void* dpAllocate(size_t size, void *location);
+dpTime dpGetFileModifiedTime(const char *path);
 
 
 
