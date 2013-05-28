@@ -13,22 +13,23 @@ DynamicPatcher::DynamicPatcher()
     ::SymInitialize(::GetCurrentProcess(), NULL, TRUE);
     ::SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
     g_instance = this;
-    m_loader = new dpLoader();
-    m_patcher = new dpPatcher();
     m_builder = new dpBuilder();
+    m_patcher = new dpPatcher();
+    m_loader  = new dpLoader();
 }
 
 DynamicPatcher::~DynamicPatcher()
 {
-    delete m_builder; m_builder=nullptr;
-    delete m_patcher; m_builder=nullptr;
+    // バイナリ unload 時に適切に unpatch するには patcher より先に loader を破棄する必要がある
     delete m_loader;  m_builder=nullptr;
+    delete m_patcher; m_builder=nullptr;
+    delete m_builder; m_builder=nullptr;
     g_instance = nullptr;
 }
 
-dpLoader*  DynamicPatcher::getLoader()  { return m_loader; }
-dpPatcher* DynamicPatcher::getPatcher() { return m_patcher; }
 dpBuilder* DynamicPatcher::getBuilder() { return m_builder; }
+dpPatcher* DynamicPatcher::getPatcher() { return m_patcher; }
+dpLoader*  DynamicPatcher::getLoader()  { return m_loader; }
 
 void DynamicPatcher::update()
 {
@@ -75,13 +76,16 @@ dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex)
 {
     if(dpBinary *bin=dpGetLoader()->findBinary(filename)) {
         std::regex reg(filter_regex);
-        dpGetPatcher()->patchByBinary(bin, [&](const char *name){ return std::regex_search(name, reg); });
+        dpGetPatcher()->patchByBinary(bin,
+            [&](const dpSymbol &sym){
+                return std::regex_search(sym.name, reg);
+            });
         return true;
     }
     return false;
 }
 
-dpAPI size_t dpPatchByFile(const char *filename, const std::function<bool (const char *symname)> &condition)
+dpAPI size_t dpPatchByFile(const char *filename, const std::function<bool (const dpSymbol&)> &condition)
 {
     if(dpBinary *bin=dpGetLoader()->findBinary(filename)) {
         dpGetPatcher()->patchByBinary(bin, condition);

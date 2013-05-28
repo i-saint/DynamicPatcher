@@ -25,9 +25,12 @@
 #endif
 #define dpObjDir "_tmp/Test1_" dpPlatform dpConfiguration 
 
+// __declspec(dllexport) がついてる関数や class には export 属性が .obj にも残る。
+// これを利用し、export 属性が付いているものはロードされた時自動的に patch する。
+// ( dpPatch == __declspec(dllexport) )
 
 
-int puts_hook(const char *s)
+dpPatch int puts_hook(const char *s)
 {
     typedef int (*puts_t)(const char *s);
     puts_t orig_puts = (puts_t)dpGetUnpatchedFunction(&puts);
@@ -35,7 +38,7 @@ int puts_hook(const char *s)
     return orig_puts(s);
 }
 
-class Test
+class dpPatch Test
 {
 public:
     Test() : m_end_flag(false) {}
@@ -45,29 +48,25 @@ public:
     {
         puts("Test::doSomething()");
         printf("Test::s_value: %d\n", s_value);
+        //m_end_flag = true;
     }
 
     bool getEndFlag() const { return m_end_flag; }
 
 private:
     static int s_value;
+    static const int s_cvalue;
     bool m_end_flag;
 };
-int Test::s_value = 100;
-
-
-dpOnLoad(
-    dpPatchByAddress(&puts, &puts_hook);
-    dpPatchByFile(dpObjDir"/Test1.obj", ".*Test.*");
-)
-
+int Test::s_value = 42;
+const int Test::s_cvalue = 42;
 
 
 int main(int argc, char *argv[])
 {
     dpInitialize();
     dpAddLoadPath(dpObjDir"/Test1.obj");
-    dpAddSourcePath(".");
+    dpAddSourcePath("Test1");
     dpStartAutoCompile("Test1.vcxproj /target:ClCompile /m /p:Configuration="dpConfiguration";Platform="dpPlatform, false);
 
     printf("DynamicPatcher Test1\n");
@@ -82,3 +81,9 @@ int main(int argc, char *argv[])
     }
     dpFinalize();
 }
+
+
+dpOnLoad(
+    //dpPatchByAddress(&puts, &puts_hook);
+    //dpPatchByFile(dpObjDir"/Test1.obj", ".*Test.*");
+)

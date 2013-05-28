@@ -55,7 +55,7 @@ static size_t CopyInstructions(void *dst, void *src, size_t minlen)
     return len;
 }
 
-void dpPatch(dpPatchData &pi)
+void Patch(dpPatchData &pi)
 {
     // 元コードの退避先
     BYTE *preserved = (BYTE*)::dpAllocate(32, pi.symbol.address);
@@ -80,7 +80,7 @@ void dpPatch(dpPatchData &pi)
     pi.size = slice;
 }
 
-void dpUnpatch(dpPatchData &pi)
+void Unpatch(dpPatchData &pi)
 {
     DWORD old;
     ::VirtualProtect(pi.symbol.address, 32, PAGE_EXECUTE_READWRITE, &old);
@@ -99,10 +99,10 @@ dpPatcher::~dpPatcher()
     unpatchAll();
 }
 
-void* dpPatcher::patchByBinary(dpBinary *obj, const std::function<bool (const char *symname)> &condition)
+void* dpPatcher::patchByBinary(dpBinary *obj, const std::function<bool (const dpSymbol&)> &condition)
 {
     obj->eachSymbols([&](const dpSymbol &sym){
-        if(condition(sym.name)) {
+        if(dpIsFunction(sym.flags) && condition(sym)) {
             patchByName(sym.name, sym.address);
         }
     });
@@ -115,12 +115,12 @@ void* dpPatcher::patchByName(const char *symbol_name, void *hook)
     if(dpLoader::findHostSymbolByName(symbol_name, sym)) {
         unpatchByAddress(sym.address);
         dpPatchData pi = {sym, nullptr, hook, 0};
-        dpPatch(pi);
-        m_patchers.push_back(pi);
+        Patch(pi);
+        m_patches.push_back(pi);
         {
             char demangled[1024];
             dpDemangle(sym.name, demangled, sizeof(demangled));
-            dpPrint("dp info: patching %s (%s) succeeded.\n", sym.name, demangled);
+            dpPrint("dp info: patched %s (%s)\n", sym.name, demangled);
         }
         return pi.orig;
     }
@@ -134,31 +134,48 @@ void* dpPatcher::patchByAddress(void *symbol_addr, void *hook)
     if(dpLoader::findHostSymbolByAddress(symbol_addr, sym, buf, sizeof(buf))) {
         unpatchByAddress(sym.address);
         dpPatchData pi = {sym, nullptr, hook, 0};
-        dpPatch(pi);
-        m_patchers.push_back(pi);
+        Patch(pi);
+        m_patches.push_back(pi);
         {
             char demangled[1024];
             dpDemangle(sym.name, demangled, sizeof(demangled));
-            dpPrint("dp info: patching %s (%s) succeeded.\n", sym.name, demangled);
+            dpPrint("dp info: patched %s (%s)\n", sym.name, demangled);
         }
         return pi.orig;
     }
     return nullptr;
 }
 
-bool dpPatcher::unpatchByBinary(dpBinary *obj)
+size_t dpPatcher::unpatchByBinary(dpBinary *obj)
 {
+    size_t n = 0;
     obj->eachSymbols([&](const dpSymbol &sym){
-        unpatchByName(sym.name);
+        if(dpPatchData *p = findPatchByName(sym.name)) {
+            if(p->hook==sym.address) {
+                Unpatch(*p);
+                m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
+                {
+                    char demangled[1024];
+                    dpDemangle(sym.name, demangled, sizeof(demangled));
+                    dpPrint("dp info: unpatched %s (%s)\n", sym.name, demangled);
+                }
+                ++n;
+            }
+        }
     });
-    return false;
+    return n;
 }
 
 bool dpPatcher::unpatchByName(const char *name)
 {
     if(dpPatchData *p = findPatchByName(name)) {
-        dpUnpatch(*p);
-        m_patchers.erase(m_patchers.begin()+std::distance(&m_patchers[0], p));
+        Unpatch(*p);
+        m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
+        {
+            char demangled[1024];
+            dpDemangle(p->symbol.name, demangled, sizeof(demangled));
+            dpPrint("dp info: unpatched %s (%s)\n", p->symbol.name, demangled);
+        }
         return true;
     }
     return false;
@@ -167,8 +184,13 @@ bool dpPatcher::unpatchByName(const char *name)
 bool dpPatcher::unpatchByAddress(void *addr)
 {
     if(dpPatchData *p = findPatchByAddress(addr)) {
-        dpUnpatch(*p);
-        m_patchers.erase(m_patchers.begin()+std::distance(&m_patchers[0], p));
+        Unpatch(*p);
+        m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
+        {
+            char demangled[1024];
+            dpDemangle(p->symbol.name, demangled, sizeof(demangled));
+            dpPrint("dp info: unpatched %s (%s)\n", p->symbol.name, demangled);
+        }
         return true;
     }
     return false;
@@ -176,8 +198,8 @@ bool dpPatcher::unpatchByAddress(void *addr)
 
 void dpPatcher::unpatchAll()
 {
-    eachPatchData([&](dpPatchData &p){ dpUnpatch(p); });
-    m_patchers.clear();
+    eachPatchData([&](dpPatchData &p){ Unpatch(p); });
+    m_patches.clear();
 }
 
 dpPatchData* dpPatcher::findPatchByName(const char *name)
@@ -199,7 +221,7 @@ dpPatchData* dpPatcher::findPatchByAddress(void *addr)
 }
 
 
-dpCLinkage dpAPI dpPatcher* dpCreatePatcher()
+dpCLinkage dpAPI dpPatcher* dpCreatedpPatcher()
 {
     return new dpPatcher();
 }

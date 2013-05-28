@@ -65,8 +65,13 @@ bool dpLoader::link()
         ::DebugBreak();
     }
 
-    // 新規ロードされているオブジェクトに OnLoad があれば呼ぶ
+    // 新規ロードされているオブジェクトに OnLoad があれば呼ぶ & dpPatch つき symbol を patch する
     for(size_t i=0; i<m_onload_queue.size(); ++i) {
+        m_onload_queue[i]->eachExports([&](const dpSymbol &sym){
+            if(dpIsFunction(sym.flags)) {
+                dpGetPatcher()->patchByName(sym.name, sym.address);
+            }
+        });
         dpCallOnLoadHandler(m_onload_queue[i]);
     }
     m_onload_queue.clear();
