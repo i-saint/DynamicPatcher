@@ -10,6 +10,7 @@
 #include <algorithm>
 
 #define dpLinkDynamic
+//#define dpDisable
 #include "../DynamicPatcher.h"
 
 
@@ -29,14 +30,15 @@
 // これを利用し、export 属性が付いているものはロードされた時自動的に patch する。
 // ( dpPatch == __declspec(dllexport) )
 
-
+dpScope(
 int puts_hook(const char *s)
 {
     typedef int (*puts_t)(const char *s);
     puts_t orig_puts = (puts_t)dpGetUnpatchedFunction(&puts);
-    orig_puts("puts_hook()");
+    orig_puts("puts_hooooook()");
     return orig_puts(s);
 }
+)
 
 class dpPatch Test
 {

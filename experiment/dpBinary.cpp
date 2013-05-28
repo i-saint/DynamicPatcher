@@ -145,7 +145,6 @@ const dpSymbol* dpSymbolTable::findSymbolByAddress( void *sym ) const
     return const_cast<dpSymbolTable*>(this)->findSymbolByAddress(sym);
 }
 
-dpSymbol::dpSymbol(const char *n, void *a, DWORD f) : name(n), address(a), flags(f) {}
 
 
 dpObjFile::dpObjFile()
