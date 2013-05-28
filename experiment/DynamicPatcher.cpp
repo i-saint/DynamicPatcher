@@ -22,8 +22,8 @@ DynamicPatcher::DynamicPatcher()
 DynamicPatcher::~DynamicPatcher()
 {
     // バイナリ unload 時に適切に unpatch するには patcher より先に loader を破棄する必要がある
-    delete m_loader;  m_builder=nullptr;
-    delete m_patcher; m_builder=nullptr;
+    delete m_loader;  m_loader=nullptr;
+    delete m_patcher; m_patcher=nullptr;
     delete m_builder; m_builder=nullptr;
     g_instance = nullptr;
 }
