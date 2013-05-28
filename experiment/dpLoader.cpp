@@ -32,7 +32,7 @@ bool dpLoader::findHostSymbolByAddress(void *addr, dpSymbol &sym, char *namebuf,
     sym.address = addr;
     sym.name = namebuf;
     strncpy(namebuf, sinfo->Name, std::min<size_t>(sinfo->NameLen+1, namebuflen));
-    return false;
+    return true;
 }
 
 
@@ -48,7 +48,7 @@ dpLoader::~dpLoader()
 
 bool dpLoader::link()
 {
-    if(!m_onload_queue.empty()) {
+    if(m_onload_queue.empty()) {
         return true;
     }
 

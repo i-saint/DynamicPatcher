@@ -51,7 +51,7 @@ bool dpMapFile(const char *path, void *&o_data, size_t &o_size, const F &alloc)
 }
 
 // 位置指定版 VirtualAlloc()
-// location より後ろの最寄りの位置にメモリを確保する。
+// location より前の最寄りの位置にメモリを確保する。
 void* dpAllocate(size_t size, void *location)
 {
     if(size==0) { return NULL; }
@@ -63,7 +63,7 @@ void* dpAllocate(size_t size, void *location)
     void *ret = NULL;
     const size_t step = 0x10000; // 64kb
     for(size_t i=0; ret==NULL; ++i) {
-        ret = ::VirtualAlloc((void*)((size_t)base+(step*i)), size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+        ret = ::VirtualAlloc((void*)((size_t)base-(step*i)), size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
     }
     return ret;
 }
@@ -171,12 +171,12 @@ void dpSymbolTable::merge(const dpSymbolTable &v)
         m_symbols.push_back(sym);
     });
     sort();
-    m_symbols.erase(std::unique(m_symbols.begin(), m_symbols.end()), m_symbols.end());
 }
 
 void dpSymbolTable::sort()
 {
     std::sort(m_symbols.begin(), m_symbols.end());
+    m_symbols.erase(std::unique(m_symbols.begin(), m_symbols.end()), m_symbols.end());
 }
 
 void dpSymbolTable::clear()
@@ -198,7 +198,10 @@ const dpSymbol* dpSymbolTable::findSymbol(const char *name) const
 {
     dpSymbol tmp = {name, nullptr};
     auto p = std::lower_bound(m_symbols.begin(), m_symbols.end(), tmp);
-    return p==m_symbols.end() ? nullptr : &(*p);
+    if(p!=m_symbols.end() && strcmp(p->name, name)==0) {
+        return &(*p);
+    }
+    return nullptr;
 }
 
 
@@ -306,6 +309,7 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
         }
         i += pSymbolTable[i].NumberOfAuxSymbols;
     }
+    m_symbols.sort();
 
     dpGetLoader()->addOnLoadList(this);
     return true;

@@ -3,6 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DynamicPatcher", "DynamicPatcher.vcxproj", "{7CCD61E5-5F56-4050-BACC-1467972D2247}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test1", "Test1.vcxproj", "{315A0660-7223-41CF-839C-69CF731F8F43}"
+	ProjectSection(ProjectDependencies) = postProject
+		{7CCD61E5-5F56-4050-BACC-1467972D2247} = {7CCD61E5-5F56-4050-BACC-1467972D2247}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -19,6 +24,14 @@ Global
 		{7CCD61E5-5F56-4050-BACC-1467972D2247}.Release|Win32.Build.0 = Release|Win32
 		{7CCD61E5-5F56-4050-BACC-1467972D2247}.Release|x64.ActiveCfg = Release|x64
 		{7CCD61E5-5F56-4050-BACC-1467972D2247}.Release|x64.Build.0 = Release|x64
+		{315A0660-7223-41CF-839C-69CF731F8F43}.Debug|Win32.ActiveCfg = Debug|Win32
+		{315A0660-7223-41CF-839C-69CF731F8F43}.Debug|Win32.Build.0 = Debug|Win32
+		{315A0660-7223-41CF-839C-69CF731F8F43}.Debug|x64.ActiveCfg = Debug|x64
+		{315A0660-7223-41CF-839C-69CF731F8F43}.Debug|x64.Build.0 = Debug|x64
+		{315A0660-7223-41CF-839C-69CF731F8F43}.Release|Win32.ActiveCfg = Release|Win32
+		{315A0660-7223-41CF-839C-69CF731F8F43}.Release|Win32.Build.0 = Release|Win32
+		{315A0660-7223-41CF-839C-69CF731F8F43}.Release|x64.ActiveCfg = Release|x64
+		{315A0660-7223-41CF-839C-69CF731F8F43}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

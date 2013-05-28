@@ -15,6 +15,7 @@
 
 #define dpDLLExport __declspec(dllexport)
 #define dpDLLImport __declspec(dllimport)
+#define dpCLinkage extern "C"
 
 #ifdef _WIN64
 #   define dpSymPrefix
@@ -26,10 +27,20 @@
 #   define dpAPI dpDLLExport
 #elif defined(dpLinkDynamic)
 #   define dpAPI dpDLLImport
+#   ifdef _WIN64
+#       pragma comment(lib,"DynamicPatcher64.lib")
+#   else // _WIN64
+#       pragma comment(lib,"DynamicPatcher.lib")
+#   endif // _WIN64
 #else
 #   define dpAPI
+#   ifdef _WIN64
+#       pragma comment(lib,"DynamicPatcher64s.lib")
+#   else // _WIN64
+#       pragma comment(lib,"DynamicPatchers.lib")
+#   endif // _WIN64
 #endif // dpDLL_Impl
-#define dpCLinkage extern "C"
+
 
 #define dpScope(...)    __VA_ARGS__
 #define dpOnLoad(...)   dpCLinkage static void dpOnLoadHandler()  { __VA_ARGS__ } __declspec(selectany) void *_dpOnLoadHandler  =dpOnLoadHandler;
@@ -335,10 +346,11 @@ dpCLinkage dpAPI bool      dpLink();
 
 dpCLinkage dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex);
 dpCLinkage dpAPI bool   dpPatchByName(const char *symbol_name);
-dpCLinkage dpAPI bool   dpPatchByAddress(void *target, const char *symbol_name);
+dpCLinkage dpAPI bool   dpPatchByAddress(void *target, void *hook);
+dpCLinkage dpAPI void*  dpGetUnpatchedFunction(void *target);
 
-dpCLinkage dpAPI void   dpAutoCompileAddLoadPath(const char *path);
-dpCLinkage dpAPI void   dpAutoCompileAddSourcePath(const char *path);
+dpCLinkage dpAPI void   dpAddLoadPath(const char *path);
+dpCLinkage dpAPI void   dpAddSourcePath(const char *path);
 dpCLinkage dpAPI bool   dpAutoCompileStart(const char *option, bool console);
 dpCLinkage dpAPI bool   dpAutoCompileStop();
 dpCLinkage dpAPI void   dpUpdate();
