@@ -90,10 +90,6 @@ struct dpPatchData {
 inline bool operator< (const dpPatchData &a, const dpPatchData &b) { return strcmp(a.symbol.name, b.symbol.name)<0; }
 inline bool operator==(const dpPatchData &a, const dpPatchData &b) { return strcmp(a.symbol.name, b.symbol.name)==0; }
 
-void dpPrint(const char* fmt, ...);
-void* dpAllocate(size_t size, void *location);
-dpTime dpGetFileModifiedTime(const char *path);
-bool dpDemangle(const char *mangled, char *demangled, size_t buflen);
 
 
 
@@ -106,9 +102,11 @@ public:
     void clear();
     size_t          getNumSymbols() const;
     dpSymbol*       getSymbol(size_t i);
-    dpSymbol*       findSymbol(const char *name);
+    dpSymbol*       findSymbolByName(const char *name);
+    dpSymbol*       findSymbolByAddress(void *sym);
     const dpSymbol* getSymbol(size_t i) const;
-    const dpSymbol* findSymbol(const char *name) const;
+    const dpSymbol* findSymbolByName(const char *name) const;
+    const dpSymbol* findSymbolByAddress(void *sym) const;
 
     // F: [](const dpSymbol &sym)
     template<class F>
@@ -207,7 +205,9 @@ private:
     dpTime m_mtime;
 };
 
-// .dll だけでなく .exe も扱える (export された symbol がないと意味がないが)
+// ロード中の dll は上書き不可能で、そのままだと実行時リビルドできない。
+// そのため、指定のファイルをコピーしてそれを扱う。(関連する .pdb もコピーする)
+// また、.dll だけでなく .exe も扱える (export された symbol がないと意味がないが)
 class dpDllFile : public dpBinary
 {
 public:
@@ -228,6 +228,7 @@ private:
     HMODULE m_module;
     bool m_needs_freelibrary;
     std::string m_path;
+    std::string m_actual_file;
     dpTime m_mtime;
     dpSymbolTable m_symbols;
 };
@@ -236,19 +237,19 @@ private:
 class dpLoader
 {
 public:
-    dpAPI static bool findHostSymbolByName(const char *name, dpSymbol &sym);
-    dpAPI static bool findHostSymbolByAddress(void *addr, dpSymbol &sym, char *namebuf, size_t namebuflen);
-
     dpLoader();
     ~dpLoader();
 
     dpAPI dpBinary* loadBinary(const char *path); // path to .obj, .lib, .dll, .exe
     dpAPI bool      link();
-    dpAPI void*     findLoadedSymbol(const char *name);
 
     dpAPI size_t    getNumBinaries() const;
     dpAPI dpBinary* getBinary(size_t index);
     dpAPI dpBinary* findBinary(const char *name);
+
+    dpAPI const dpSymbol* findLoadedSymbolByName(const char *name);
+    dpAPI const dpSymbol* findHostSymbolByName(const char *name);
+    dpAPI const dpSymbol* findHostSymbolByAddress(void *addr);
 
     // F: [](dpBinary *bin)
     template<class F>
@@ -264,6 +265,7 @@ private:
     typedef std::vector<dpBinary*> binary_cont;
     binary_cont m_binaries;
     binary_cont m_onload_queue;
+    dpSymbolTable m_hostsymbols;
 };
 
 
@@ -356,8 +358,8 @@ dpAPI DynamicPatcher* dpGetInstance();
 dpAPI bool   dpInitialize();
 dpAPI bool   dpFinalize();
 
-dpAPI dpBinary* dpLoad(const char *path); // path to .obj .lib .dll .exe or directory
-dpAPI bool      dpLink();
+dpAPI size_t dpLoad(const char *path); // path to .obj .lib .dll .exe. accept wildcard (x64/Debug/*.obj)
+dpAPI bool   dpLink();
 
 dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex);
 dpAPI size_t dpPatchByFile(const char *filename, const std::function<bool (const dpSymbol&)> &condition);
@@ -365,9 +367,9 @@ dpAPI bool   dpPatchByName(const char *symbol_name);
 dpAPI bool   dpPatchByAddress(void *target, void *hook);
 dpAPI void*  dpGetUnpatchedFunction(void *target);
 
-dpAPI void   dpAddLoadPath(const char *path);
+dpAPI void   dpAddLoadPath(const char *path); // accept wildcard (x64/Debug/*.obj)
 dpAPI void   dpAddSourcePath(const char *path);
-dpAPI bool   dpStartAutoCompile(const char *option, bool console);
+dpAPI bool   dpStartAutoCompile(const char *msbuild_option, bool console=false);
 dpAPI bool   dpStopAutoCompile();
 dpAPI void   dpUpdate();
 

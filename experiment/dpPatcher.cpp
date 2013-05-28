@@ -3,6 +3,7 @@
 // https://github.com/i-saint/DynamicObjLoader
 
 #include "DynamicPatcher.h"
+#include "dpInternal.h"
 #include "disasm-lib/disasm.h"
 #include <regex>
 
@@ -109,37 +110,41 @@ void* dpPatcher::patchByBinary(dpBinary *obj, const std::function<bool (const dp
     return nullptr;
 }
 
-void* dpPatcher::patchByName(const char *symbol_name, void *hook)
+void* dpPatcher::patchByName(const char *name, void *hook)
 {
-    dpSymbol sym;
-    if(dpLoader::findHostSymbolByName(symbol_name, sym)) {
-        unpatchByAddress(sym.address);
-        dpPatchData pi = {sym, nullptr, hook, 0};
+    if(const dpSymbol *sym = dpGetLoader()->findHostSymbolByName(name)) {
+        unpatchByAddress(sym->address);
+        dpPatchData pi = {*sym, nullptr, hook, 0};
         Patch(pi);
         m_patches.push_back(pi);
         {
             char demangled[1024];
-            dpDemangle(sym.name, demangled, sizeof(demangled));
-            dpPrint("dp info: patched %s (%s)\n", sym.name, demangled);
+            dpDemangle(sym->name, demangled, sizeof(demangled));
+            dpPrint("dp info: patched %s (%s)\n", sym->name, demangled);
         }
         return pi.orig;
     }
     return nullptr;
 }
 
-void* dpPatcher::patchByAddress(void *symbol_addr, void *hook)
+inline void dpPrintUnpatch(const dpSymbol &sym)
 {
-    dpSymbol sym;
-    char buf[1024];
-    if(dpLoader::findHostSymbolByAddress(symbol_addr, sym, buf, sizeof(buf))) {
-        unpatchByAddress(sym.address);
-        dpPatchData pi = {sym, nullptr, hook, 0};
+    char demangled[1024];
+    dpDemangle(sym.name, demangled, sizeof(demangled));
+    dpPrint("dp info: unpatched %s (%s)\n", sym.name, demangled);
+}
+
+void* dpPatcher::patchByAddress(void *addr, void *hook)
+{
+    if(const dpSymbol *sym=dpGetLoader()->findHostSymbolByAddress(addr)) {
+        unpatchByAddress(sym->address);
+        dpPatchData pi = {*sym, nullptr, hook, 0};
         Patch(pi);
         m_patches.push_back(pi);
         {
             char demangled[1024];
-            dpDemangle(sym.name, demangled, sizeof(demangled));
-            dpPrint("dp info: patched %s (%s)\n", sym.name, demangled);
+            dpDemangle(sym->name, demangled, sizeof(demangled));
+            dpPrint("dp info: patched %s (%s)\n", sym->name, demangled);
         }
         return pi.orig;
     }
@@ -152,13 +157,9 @@ size_t dpPatcher::unpatchByBinary(dpBinary *obj)
     obj->eachSymbols([&](const dpSymbol &sym){
         if(dpPatchData *p = findPatchByName(sym.name)) {
             if(p->hook==sym.address) {
+                dpPrintUnpatch(sym);
                 Unpatch(*p);
                 m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
-                {
-                    char demangled[1024];
-                    dpDemangle(sym.name, demangled, sizeof(demangled));
-                    dpPrint("dp info: unpatched %s (%s)\n", sym.name, demangled);
-                }
                 ++n;
             }
         }
@@ -169,13 +170,9 @@ size_t dpPatcher::unpatchByBinary(dpBinary *obj)
 bool dpPatcher::unpatchByName(const char *name)
 {
     if(dpPatchData *p = findPatchByName(name)) {
+        dpPrintUnpatch(p->symbol);
         Unpatch(*p);
         m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
-        {
-            char demangled[1024];
-            dpDemangle(p->symbol.name, demangled, sizeof(demangled));
-            dpPrint("dp info: unpatched %s (%s)\n", p->symbol.name, demangled);
-        }
         return true;
     }
     return false;
@@ -184,13 +181,9 @@ bool dpPatcher::unpatchByName(const char *name)
 bool dpPatcher::unpatchByAddress(void *addr)
 {
     if(dpPatchData *p = findPatchByAddress(addr)) {
+        dpPrintUnpatch(p->symbol);
         Unpatch(*p);
         m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
-        {
-            char demangled[1024];
-            dpDemangle(p->symbol.name, demangled, sizeof(demangled));
-            dpPrint("dp info: unpatched %s (%s)\n", p->symbol.name, demangled);
-        }
         return true;
     }
     return false;

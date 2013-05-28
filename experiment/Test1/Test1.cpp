@@ -30,7 +30,7 @@
 // ( dpPatch == __declspec(dllexport) )
 
 
-dpPatch int puts_hook(const char *s)
+int puts_hook(const char *s)
 {
     typedef int (*puts_t)(const char *s);
     puts_t orig_puts = (puts_t)dpGetUnpatchedFunction(&puts);
@@ -65,9 +65,12 @@ const int Test::s_cvalue = 42;
 int main(int argc, char *argv[])
 {
     dpInitialize();
-    dpAddLoadPath(dpObjDir"/Test1.obj");
+    dpAddLoadPath(dpObjDir"/*.obj");
     dpAddSourcePath("Test1");
     dpStartAutoCompile("Test1.vcxproj /target:ClCompile /m /p:Configuration="dpConfiguration";Platform="dpPlatform, false);
+
+    dpLoad(dpObjDir"/*.obj");
+    dpLink();
 
     printf("DynamicPatcher Test1\n");
     {
@@ -84,6 +87,6 @@ int main(int argc, char *argv[])
 
 
 dpOnLoad(
-    //dpPatchByAddress(&puts, &puts_hook);
+    dpPatchByAddress(&puts, &puts_hook);
     //dpPatchByFile(dpObjDir"/Test1.obj", ".*Test.*");
 )

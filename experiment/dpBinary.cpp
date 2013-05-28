@@ -3,81 +3,13 @@
 // https://github.com/i-saint/DynamicObjLoader
 
 #include "DynamicPatcher.h"
+#include "dpInternal.h"
 #include <regex>
 
 typedef unsigned long long QWORD;
 const char g_symname_onload[]   = dpSymPrefix "dpOnLoadHandler";
 const char g_symname_onunload[] = dpSymPrefix "dpOnUnloadHandler";
 
-
-template<size_t N>
-inline int dpVSprintf(char (&buf)[N], const char *format, va_list vl)
-{
-    return _vsnprintf(buf, N, format, vl);
-}
-
-static const int DPRINTF_MES_LENGTH  = 4096;
-void dpPrintV(const char* fmt, va_list vl)
-{
-    char buf[DPRINTF_MES_LENGTH];
-    dpVSprintf(buf, fmt, vl);
-    ::OutputDebugStringA(buf);
-}
-
-void dpPrint(const char* fmt, ...)
-{
-    va_list vl;
-    va_start(vl, fmt);
-    dpPrintV(fmt, vl);
-    va_end(vl);
-}
-
-// F: [](size_t size) -> void* : alloc func
-template<class F>
-bool dpMapFile(const char *path, void *&o_data, size_t &o_size, const F &alloc)
-{
-    o_data = NULL;
-    o_size = 0;
-    if(FILE *f=fopen(path, "rb")) {
-        fseek(f, 0, SEEK_END);
-        o_size = ftell(f);
-        if(o_size > 0) {
-            o_data = alloc(o_size);
-            fseek(f, 0, SEEK_SET);
-            fread(o_data, 1, o_size, f);
-        }
-        fclose(f);
-        return true;
-    }
-    return false;
-}
-
-// 位置指定版 VirtualAlloc()
-// location より前の最寄りの位置にメモリを確保する。
-void* dpAllocate(size_t size, void *location)
-{
-    if(size==0) { return NULL; }
-    static size_t base = (size_t)location;
-
-    // ドキュメントには、アドレス指定の VirtualAlloc() は指定先が既に予約されている場合最寄りの領域を返す、
-    // と書いてるように見えるが、実際には NULL が返ってくるようにしか見えない。
-    // なので成功するまでアドレスを進めつつリトライ…。
-    void *ret = NULL;
-    const size_t step = 0x10000; // 64kb
-    for(size_t i=0; ret==NULL; ++i) {
-        ret = ::VirtualAlloc((void*)((size_t)base-(step*i)), size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    }
-    return ret;
-}
-
-// exe がマップされている領域の後ろの最寄りの場所にメモリを確保する。
-// jmp 命令などの移動量は x64 でも 32bit なため、32bit に収まらない距離を飛ぼうとした場合あらぬところに着地して死ぬ。
-// そして new や malloc() だと 32bit に収まらない遥か彼方にメモリが確保されてしまうため、これが必要になる。
-// .exe がマップされている領域を調べ、その近くに VirtualAlloc() するという内容。
-void* dpAllocateModule(size_t size)
-{
-    return dpAllocate(size, GetModuleHandleA(nullptr));
-}
 
 // アラインが必要な section データを再配置するための単純なアロケータ
 class dpSectionAllocator
@@ -108,36 +40,22 @@ private:
     size_t m_used;
 };
 
-dpTime dpGetFileModifiedTime(const char *path)
-{
-    union RetT
-    {
-        FILETIME filetime;
-        dpTime qword;
-    } ret;
-    HANDLE h = ::CreateFileA(path, 0, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    ::GetFileTime(h, NULL, NULL, &ret.filetime);
-    ::CloseHandle(h);
-    return ret.qword;
-}
-inline bool operator==(const FILETIME &l, const FILETIME &r)
-{
-    return l.dwHighDateTime==r.dwHighDateTime && l.dwLowDateTime==r.dwLowDateTime;
-}
-
 void* dpResolveExternalSymbol( dpBinary *bin, const char *name )
 {
     void *sym = nullptr;
-    if(const dpSymbol *s=bin->getSymbolTable().findSymbol(name)) {
-        sym = s->address;
+    {
+        if(const dpSymbol *s=bin->getSymbolTable().findSymbolByName(name)) {
+            sym = s->address;
+        }
     }
     if(!sym) {
-        sym = dpGetLoader()->findLoadedSymbol(name);
+        if(const dpSymbol *s=dpGetLoader()->findLoadedSymbolByName(name)) {
+            sym = s->address;
+        }
     }
     if(!sym) {
-        dpSymbol t;
-        if(dpLoader::findHostSymbolByName(name, t)) {
-            sym = t.address;
+        if(const dpSymbol *s=dpGetLoader()->findHostSymbolByName(name)) {
+            sym = s->address;
         }
     }
     return sym;
@@ -146,21 +64,16 @@ void* dpResolveExternalSymbol( dpBinary *bin, const char *name )
 typedef void (*dpHandler)();
 void dpCallOnLoadHandler(dpBinary *v)
 {
-    if(const dpSymbol *sym = v->getSymbolTable().findSymbol(g_symname_onload)) {
+    if(const dpSymbol *sym = v->getSymbolTable().findSymbolByName(g_symname_onload)) {
         ((dpHandler)sym->address)();
     }
 }
 
 void dpCallOnUnloadHandler(dpBinary *v)
 {
-    if(const dpSymbol *sym = v->getSymbolTable().findSymbol(g_symname_onunload)) {
+    if(const dpSymbol *sym = v->getSymbolTable().findSymbolByName(g_symname_onunload)) {
         ((dpHandler)sym->address)();
     }
-}
-
-bool dpDemangle(const char *mangled, char *demangled, size_t buflen)
-{
-    return ::UnDecorateSymbolName(mangled, demangled, buflen, UNDNAME_COMPLETE)!=0;
 }
 
 
@@ -201,7 +114,7 @@ dpSymbol* dpSymbolTable::getSymbol(size_t i)
     return &m_symbols[i];
 }
 
-dpSymbol* dpSymbolTable::findSymbol(const char *name)
+dpSymbol* dpSymbolTable::findSymbolByName(const char *name)
 {
     dpSymbol tmp(name, nullptr, 0);
     auto p = std::lower_bound(m_symbols.begin(), m_symbols.end(), tmp);
@@ -211,14 +124,25 @@ dpSymbol* dpSymbolTable::findSymbol(const char *name)
     return nullptr;
 }
 
+dpSymbol* dpSymbolTable::findSymbolByAddress( void *addr )
+{
+    auto p = std::find_if(m_symbols.begin(), m_symbols.end(), [=](const dpSymbol &sym){ return sym.address==addr; });
+    return p==m_symbols.end() ? nullptr : &(*p);
+}
+
 const dpSymbol* dpSymbolTable::getSymbol(size_t i) const
 {
     return const_cast<dpSymbolTable*>(this)->getSymbol(i);
 }
 
-const dpSymbol* dpSymbolTable::findSymbol(const char *name) const
+const dpSymbol* dpSymbolTable::findSymbolByName(const char *name) const
 {
-    return const_cast<dpSymbolTable*>(this)->findSymbol(name);
+    return const_cast<dpSymbolTable*>(this)->findSymbolByName(name);
+}
+
+const dpSymbol* dpSymbolTable::findSymbolByAddress( void *sym ) const
+{
+    return const_cast<dpSymbolTable*>(this)->findSymbolByAddress(sym);
 }
 
 dpSymbol::dpSymbol(const char *n, void *a, DWORD f) : name(n), address(a), flags(f) {}
@@ -357,7 +281,7 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
     // export が名前しか情報がない状態なのでそれ以外も補完
     for(size_t i=0; i<m_exports.getNumSymbols(); ++i) {
         dpSymbol *e = m_exports.getSymbol(i);
-        if(dpSymbol *s = m_symbols.findSymbol(e->name)) {
+        if(dpSymbol *s = m_symbols.findSymbolByName(e->name)) {
             s->flags |= dpE_Export;
             *e = *s;
         }
@@ -549,8 +473,8 @@ bool dpLibFile::loadMemory(const char *path, void *lib_data, size_t lib_size, dp
 
         std::string name;
         void *data;
-        DWORD32 time, size;
-        sscanf((char*)header->Date, "%d", &time);
+        DWORD32 mtime, size;
+        sscanf((char*)header->Date, "%d", &mtime);
         sscanf((char*)header->Size, "%d", &size);
 
         // Name の先頭 2 文字が "//" の場合 long name を保持する特殊セクション
@@ -577,11 +501,11 @@ bool dpLibFile::loadMemory(const char *path, void *lib_data, size_t lib_size, dp
 
             dpObjFile *obj = findObjFile(name.c_str());
             if(obj) {
-                if(obj->getLastModifiedTime()<=time) {
+                if(mtime <= obj->getLastModifiedTime()) {
                     goto GO_NEXT;
                 }
                 else {
-                    if(obj->loadMemory(name.c_str(), data, size, time)) {
+                    if(obj->loadMemory(name.c_str(), data, size, mtime)) {
                         m_symbols.merge(obj->getSymbolTable());
                     }
                 }
@@ -590,7 +514,7 @@ bool dpLibFile::loadMemory(const char *path, void *lib_data, size_t lib_size, dp
                 data = dpAllocateModule(size);
                 memcpy(data, base, size);
                 dpObjFile *obj = new dpObjFile();
-                if(obj->loadMemory(name.c_str(), data, size, time)) {
+                if(obj->loadMemory(name.c_str(), data, size, mtime)) {
                     m_symbols.merge(obj->getSymbolTable());
                     m_exports.merge(obj->getExportTable());
                     m_objs.push_back(obj);
@@ -650,9 +574,10 @@ dpDllFile::dpDllFile()
 
 dpDllFile::~dpDllFile()
 {
+    unload();
 }
 
-// F: functor(const char *funcname, void *funcptr)
+// F: functor(const char *name, void *sym)
 template<class F>
 inline void EnumerateDLLExports(HMODULE module, const F &f)
 {
@@ -682,18 +607,11 @@ bool dpDllFile::loadFile(const char *path)
     dpTime mtime = dpGetFileModifiedTime(path);
     if(m_module && m_path==path && mtime<=m_mtime) { return true; }
 
-    unload();
+    // todo: 指定ファイルそのまま使うのではなく、コピーしてそれ使うようにする
+    HMODULE module = ::LoadLibraryA(path);
 
-    m_path = path;
-    m_mtime = mtime;
-    m_module = ::LoadLibraryA(path);
-    if(m_module!=nullptr) {
+    if(loadMemory(path, module, 0, mtime)) {
         m_needs_freelibrary = true;
-        EnumerateDLLExports(m_module, [&](const char *funcname, void *funcptr){
-            m_symbols.addSymbol(dpSymbol(funcname, funcptr));
-        });
-        m_symbols.sort();
-        dpGetLoader()->addOnLoadList(this);
         return true;
     }
     return false;
@@ -701,18 +619,17 @@ bool dpDllFile::loadFile(const char *path)
 
 bool dpDllFile::loadMemory(const char *path, void *data, size_t datasize, dpTime mtime)
 {
+    if(data==nullptr) { return false; }
     if(m_module && m_path==path && mtime<=m_mtime) { return true; }
 
-    unload();
-
-    if(data==nullptr) { return false; }
     m_path = path;
     m_mtime = mtime;
     m_module = (HMODULE)data;
-    EnumerateDLLExports(m_module, [&](const char *funcname, void *funcptr){
-        m_symbols.addSymbol(dpSymbol(funcname, funcptr));
+    EnumerateDLLExports(m_module, [&](const char *name, void *sym){
+        m_symbols.addSymbol(dpSymbol(name, sym, dpE_Export));
     });
     m_symbols.sort();
+    dpGetLoader()->addOnLoadList(this);
     return true;
 }
 

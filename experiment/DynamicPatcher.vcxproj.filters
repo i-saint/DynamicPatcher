@@ -18,6 +18,7 @@
     <ClCompile Include="disasm-lib\misc.c">
       <Filter>disasm-lib</Filter>
     </ClCompile>
+    <ClCompile Include="dpFoundation.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DynamicPatcher.h" />
@@ -36,6 +37,7 @@
     <ClInclude Include="disasm-lib\misc.h">
       <Filter>disasm-lib</Filter>
     </ClInclude>
+    <ClInclude Include="dpInternal.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="disasm-lib">

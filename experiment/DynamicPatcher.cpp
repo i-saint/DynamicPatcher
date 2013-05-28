@@ -3,6 +3,7 @@
 // https://github.com/i-saint/DynamicObjLoader
 
 #include "DynamicPatcher.h"
+#include "dpInternal.h"
 #include <regex>
 #pragma comment(lib, "dbghelp.lib")
 
@@ -62,9 +63,13 @@ dpAPI bool dpFinalize()
 }
 
 
-dpAPI dpBinary* dpLoad(const char *path)
+dpAPI size_t dpLoad(const char *path)
 {
-    return dpGetLoader()->loadBinary(path);
+    size_t ret = 0;
+    dpGlob(path, [&](const std::string &p){
+        if(dpGetLoader()->loadBinary(p.c_str())) { ++ret; }
+    });
+    return ret;
 }
 
 dpAPI bool dpLink()
@@ -96,10 +101,9 @@ dpAPI size_t dpPatchByFile(const char *filename, const std::function<bool (const
 
 dpAPI bool dpPatchByName(const char *name)
 {
-    dpSymbol sym;
-    if(dpGetLoader()->findHostSymbolByName(name, sym)) {
-        if(void *hook=dpGetLoader()->findLoadedSymbol(sym.name)) {
-            dpGetPatcher()->patchByAddress(sym.address, hook);
+    if(const dpSymbol *sym=dpGetLoader()->findHostSymbolByName(name)) {
+        if(const dpSymbol *hook=dpGetLoader()->findLoadedSymbolByName(sym->name)) {
+            dpGetPatcher()->patchByAddress(sym->address, hook->address);
             return true;
         }
     }

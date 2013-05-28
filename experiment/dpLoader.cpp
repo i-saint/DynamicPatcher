@@ -3,36 +3,48 @@
 // https://github.com/i-saint/DynamicObjLoader
 
 #include "DynamicPatcher.h"
+#include "dpInternal.h"
 
 void dpCallOnLoadHandler(dpBinary *v);
 
-bool dpLoader::findHostSymbolByName(const char *name, dpSymbol &sym)
+const dpSymbol* dpLoader::findHostSymbolByName(const char *name)
 {
+    if(const dpSymbol *sym = m_hostsymbols.findSymbolByName(name)) {
+        return sym;
+    }
+
     char buf[sizeof(SYMBOL_INFO)+1024];
     PSYMBOL_INFO sinfo = (PSYMBOL_INFO)buf;
     sinfo->SizeOfStruct = sizeof(SYMBOL_INFO);
-    sinfo->MaxNameLen = MAX_PATH;
+    sinfo->MaxNameLen = 1024;
     if(::SymFromName(::GetCurrentProcess(), name, sinfo)==FALSE) {
-        return false;
+        return nullptr;
     }
-    sym.address = (void*)sinfo->Address;
-    sym.name = name;
-    return true;
+    char *namebuf = new char[sinfo->NameLen+1];
+    strncpy(namebuf, sinfo->Name, sinfo->NameLen+1);
+    m_hostsymbols.addSymbol(dpSymbol(namebuf, (void*)sinfo->Address, 0));
+    m_hostsymbols.sort();
+    return m_hostsymbols.findSymbolByName(name);
 }
 
-bool dpLoader::findHostSymbolByAddress(void *addr, dpSymbol &sym, char *namebuf, size_t namebuflen)
+const dpSymbol* dpLoader::findHostSymbolByAddress(void *addr)
 {
-    char buf[sizeof(SYMBOL_INFO)+MAX_PATH];
+    if(const dpSymbol *sym = m_hostsymbols.findSymbolByAddress(addr)) {
+        return sym;
+    }
+
+    char buf[sizeof(SYMBOL_INFO)+1024];
     PSYMBOL_INFO sinfo = (PSYMBOL_INFO)buf;
     sinfo->SizeOfStruct = sizeof(SYMBOL_INFO);
-    sinfo->MaxNameLen = MAX_PATH;
+    sinfo->MaxNameLen = 1024;
     if(::SymFromAddr(::GetCurrentProcess(), (DWORD64)addr, 0, sinfo)==FALSE) {
         return false;
     }
-    sym.address = addr;
-    sym.name = namebuf;
-    strncpy(namebuf, sinfo->Name, std::min<size_t>(sinfo->NameLen+1, namebuflen));
-    return true;
+    char *namebuf = new char[sinfo->NameLen+1];
+    strncpy(namebuf, sinfo->Name, sinfo->NameLen+1);
+    m_hostsymbols.addSymbol(dpSymbol(namebuf, (void*)sinfo->Address, 0));
+    m_hostsymbols.sort();
+    return m_hostsymbols.findSymbolByAddress(addr);
 }
 
 
@@ -42,6 +54,7 @@ dpLoader::dpLoader()
 
 dpLoader::~dpLoader()
 {
+    m_hostsymbols.eachSymbols([](const dpSymbol &sym){ delete[] sym.name; });
     eachBinaries([](dpBinary *bin){ delete bin; });
     m_binaries.clear();
 }
@@ -126,16 +139,15 @@ dpBinary* dpLoader::loadBinary(const char *path)
     return ret;
 }
 
-void* dpLoader::findLoadedSymbol(const char *name)
+const dpSymbol* dpLoader::findLoadedSymbolByName(const char *name)
 {
-    void *ret = nullptr;
-    eachBinaries([&](dpBinary *bin){
-        if(ret) { return; }
-        if(const dpSymbol *s = bin->getSymbolTable().findSymbol(name)) {
-            ret = s->address;
+    size_t n = m_binaries.size();
+    for(size_t i=0; i<n; ++i) {
+        if(const dpSymbol *s = m_binaries[i]->getSymbolTable().findSymbolByName(name)) {
+            return s;
         }
-    });
-    return ret;
+    }
+    return nullptr;
 }
 
 size_t dpLoader::getNumBinaries() const

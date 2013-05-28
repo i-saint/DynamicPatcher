@@ -3,6 +3,7 @@
 // https://github.com/i-saint/DynamicObjLoader
 
 #include "DynamicPatcher.h"
+#include "dpInternal.h"
 
 dpBuilder::dpBuilder()
     : m_msbuild_option()
@@ -162,24 +163,11 @@ void dpBuilder::update()
 
         size_t num_loaded = 0;
         for(size_t i=0; i<m_loadpathes.size(); ++i) {
-            const std::string &path = m_loadpathes[i];
-            std::string dir;
-            size_t dir_len=0;
-            for(size_t l=0; l<path.size(); ++l) {
-                if(path[l]=='\\' || path[l]=='/') { dir_len=l+1; }
-            }
-            dir.insert(dir.end(), path.begin(), path.begin()+dir_len);
-
-            WIN32_FIND_DATAA wfdata;
-            HANDLE handle = ::FindFirstFileA(path.c_str(), &wfdata);
-            if(handle!=INVALID_HANDLE_VALUE) {
-                do {
-                    if(dpGetLoader()->loadBinary((dir+wfdata.cFileName).c_str())) {
-                        ++num_loaded;
-                    }
-                } while(::FindNextFileA(handle, &wfdata));
-                ::FindClose(handle);
-            }
+            dpGlob(m_loadpathes[i], [&](const std::string &path){
+                if(dpGetLoader()->loadBinary(path.c_str())) {
+                    ++num_loaded;
+                }
+            });
         }
         if(num_loaded) {
             dpGetLoader()->link();
