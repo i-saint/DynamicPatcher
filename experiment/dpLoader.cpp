@@ -84,25 +84,37 @@ dpBinary* dpLoader::loadBinary(const char *path)
     size_t len = strlen(path);
     if(len < 4) { return nullptr; }
 
-    dpBinary *ret = nullptr;
-    if(strcmp(&path[len-4], ".obj")==0) {
-        ret = new dpObjFile();
-    }
-    else if(strcmp(&path[len-4], ".lib")==0) {
-        ret = new dpLibFile();
-    }
-    else if(strcmp(&path[len-4], ".dll")==0 || strcmp(&path[len-4], ".exe")==0) {
-        ret = new dpDllFile();
-    }
-
-    if(ret) {
-        if(ret->loadFile(path)) {
-            m_binaries.push_back(ret);
+    dpBinary *ret = findBinary(path);
+    bool needs_add = false;
+    if(!ret) {
+        if(_stricmp(&path[len-4], ".obj")==0) {
+            ret = new dpObjFile();
+        }
+        else if(_stricmp(&path[len-4], ".lib")==0) {
+            ret = new dpLibFile();
+        }
+        else if(_stricmp(&path[len-4], ".dll")==0 || _stricmp(&path[len-4], ".exe")==0) {
+            ret = new dpDllFile();
         }
         else {
-            delete ret;
-            ret = nullptr;
+            dpPrint("dp error: unsupported file %s\n", path);
+            return nullptr;
         }
+        needs_add = true;
+    }
+
+    if(ret->loadFile(path)) {
+        if(needs_add) {
+            m_binaries.push_back(ret);
+        }
+    }
+    else {
+        auto i = std::find(m_binaries.begin(), m_binaries.end(), ret);
+        if(i!=m_binaries.end()) {
+            m_binaries.erase(i);
+        }
+        delete ret;
+        ret = nullptr;
     }
     return ret;
 }

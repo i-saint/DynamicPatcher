@@ -79,6 +79,7 @@ inline bool operator< (const dpPatchData &a, const dpPatchData &b) { return strc
 inline bool operator==(const dpPatchData &a, const dpPatchData &b) { return strcmp(a.symbol.name, b.symbol.name)==0; }
 
 void dpPrint(const char* fmt, ...);
+void* dpAllocate(size_t size, void *location);
 
 
 
@@ -89,9 +90,9 @@ public:
     void merge(const dpSymbolTable &v);
     void sort();
     void clear();
-    dpAPI size_t            getNumSymbols() const;
-    dpAPI const dpSymbol*   getSymbol(size_t i) const;
-    dpAPI const dpSymbol*   findSymbol(const char *name) const;
+    size_t            getNumSymbols() const;
+    const dpSymbol*   getSymbol(size_t i) const;
+    const dpSymbol*   findSymbol(const char *name) const;
 
     // F: [](const dpSymbol &sym)
     template<class F>
@@ -351,8 +352,8 @@ dpCLinkage dpAPI void*  dpGetUnpatchedFunction(void *target);
 
 dpCLinkage dpAPI void   dpAddLoadPath(const char *path);
 dpCLinkage dpAPI void   dpAddSourcePath(const char *path);
-dpCLinkage dpAPI bool   dpAutoCompileStart(const char *option, bool console);
-dpCLinkage dpAPI bool   dpAutoCompileStop();
+dpCLinkage dpAPI bool   dpStartAutoCompile(const char *option, bool console);
+dpCLinkage dpAPI bool   dpStopAutoCompile();
 dpCLinkage dpAPI void   dpUpdate();
 
 #endif // DynamicPatcher_h

@@ -120,12 +120,12 @@ dpCLinkage dpAPI void dpAddSourcePath(const char *path)
     dpGetBuilder()->addSourcePath(path);
 }
 
-dpCLinkage dpAPI bool dpAutoCompileStart(const char *option, bool console)
+dpCLinkage dpAPI bool dpStartAutoCompile(const char *option, bool console)
 {
     return dpGetBuilder()->startAutoCompile(option, console);
 }
 
-dpCLinkage dpAPI bool dpAutoCompileStop()
+dpCLinkage dpAPI bool dpStopAutoCompile()
 {
     return dpGetBuilder()->stopAutoCompile();
 }

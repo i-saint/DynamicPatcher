@@ -19,9 +19,18 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="disasm-lib\cpu.h" />
+    <ClInclude Include="disasm-lib\disasm.h" />
+    <ClInclude Include="disasm-lib\disasm_x86.h" />
+    <ClInclude Include="disasm-lib\disasm_x86_tables.h" />
+    <ClInclude Include="disasm-lib\misc.h" />
     <ClInclude Include="DynamicPatcher.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="disasm-lib\cpu.c" />
+    <ClCompile Include="disasm-lib\disasm.c" />
+    <ClCompile Include="disasm-lib\disasm_x86.c" />
+    <ClCompile Include="disasm-lib\misc.c" />
     <ClCompile Include="dpBinary.cpp" />
     <ClCompile Include="dpBuilder.cpp" />
     <ClCompile Include="dpLoader.cpp" />

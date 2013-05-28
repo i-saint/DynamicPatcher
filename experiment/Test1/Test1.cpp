@@ -24,8 +24,9 @@ class Test
 {
 public:
     Test() : m_end_flag(false) {}
+    virtual ~Test() {}
 
-    void doSomething()
+    virtual void doSomething()
     {
         puts("Test::print()");
     }
@@ -43,17 +44,32 @@ dpOnLoad(
 
 int main(int argc, char *argv[])
 {
+#ifdef _WIN64
+#   define Platform "x64"
+#else
+#   define Platform "Win32"
+#endif
+#ifdef _DEBUG
+#   define Configuration "Debug"
+#else
+#   define Configuration "Release"
+#endif
+#define ObjDir "_tmp/Test1_" Platform Configuration 
+
     dpInitialize();
+    dpAddLoadPath(ObjDir "/Test1.obj");
+    dpAddSourcePath(".");
 
     printf("DynamicPatcher Test1\n");
     {
         Test test;
         while(!test.getEndFlag()) {
             test.doSomething();
-            dpLoad("_tmp/Test1_Win32Debug/Test1.obj");
+            dpLoad(ObjDir "/Test1.obj");
             dpLink();
-            //dpUpdate();
-            ::Sleep(100);
+
+            ::Sleep(1000);
+            dpUpdate();
         }
     }
     dpFinalize();

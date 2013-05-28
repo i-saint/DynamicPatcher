@@ -3,84 +3,62 @@
 // https://github.com/i-saint/DynamicObjLoader
 
 #include "DynamicPatcher.h"
+#include "disasm-lib/disasm.h"
 #include <regex>
 
-
-size_t CopyInstructions(void *dst_, const void *src_, size_t required)
+static size_t CopyInstructions(void *dst, void *src, size_t minlen)
 {
-    // 不完全につき、未対応の instruction があれば適宜追加すべし
-    // 関数の頭 5 byte 以内で実行されるものは多くが mov,sub,push あたりなのでこれだけでも多くに対応はできるハズ
-    size_t ret = 0;
-    const BYTE *src = (const BYTE*)src_;
-    BYTE *dst = (BYTE*)dst_;
+    size_t len = 0;
+#ifdef _WIN64
+    ARCHITECTURE_TYPE arch = ARCH_X64;
+#elif defined _WIN32
+    ARCHITECTURE_TYPE arch = ARCH_X86;
+#else
+#   error unsupported platform
+#endif
+    DISASSEMBLER dis;
+    if (InitDisassembler(&dis, arch)) {
+        INSTRUCTION* pins = NULL;
+        U8* pLoc = (U8*)src;
+        U8* pDst = (U8*)dst;
+        DWORD dwFlags = DISASM_SUPPRESSERRORS;
 
-    for(; ret<required; ) {
-        int size = 0; // instruction size
-        bool can_memcpy = true;
+        while( len<minlen && (pins=GetInstruction(&dis, (ULONG_PTR)pLoc, pLoc, dwFlags)) ) {
+            if(pins->Type == ITYPE_RET		) break;
 
-        switch(src[ret]) {
-            // push
-        case 0x55: size=1; break;
-        case 0x68:
-        case 0x6A: size=5; break;
-        case 0xFF:
-            switch(src[ret+1]) {
-            case 0x74: size=4; break;
-            default:   size=3; break;
-            }
-
-            // mov
-        case 0x8B:
-            switch(src[ret+1]) {
-            case 0x44: size=4; break;
-            case 0x45: size=3; break;
-            default:   size=2; break;
-            }
-            break;
-        case 0xB8: size=5; break;
-
-            // sub
-        case 0x81: 
-            switch(src[ret+1]) {
-            case 0xEC: size=6; break;
-            default:   size=2; break;
-            }
-            break;
-        case 0x83:
-            switch(src[ret+1]) {
-            case 0xEC: size=3; break;
-            default:   size=2; break;
-            }
-            break;
-
+            //// todo: call or jmp
+            //if(pins->Type == ITYPE_BRANCH	) break;
+            //if(pins->Type == ITYPE_BRANCHCC) break;
+            //if(pins->Type == ITYPE_CALL	) break;
+            //if(pins->Type == ITYPE_CALLCC	) break;
+            /*
             // call & jmp
-        case 0xE8:
-        case 0xE9:
-            {
-                can_memcpy = false;
-                int rva = *(int*)(src+1);
-                dst[ret] = src[ret];
-                *(DWORD*)(dst+ret+1) = (ptrdiff_t)(src+ret+rva)-(ptrdiff_t)(dst+ret);
-                ret += 5;
-            }
-            break;
+            case 0xE8:
+            case 0xE9:
+                {
+                    can_memcpy = false;
+                    int rva = *(int*)(src+1);
+                    dst[ret] = src[ret];
+                    *(DWORD*)(dst+ret+1) = (ptrdiff_t)(src+ret+rva)-(ptrdiff_t)(dst+ret);
+                    ret += 5;
+                }
+            */
 
-        default: size=1; break;
+            memcpy(pDst, pLoc, pins->Length);
+            len  += pins->Length;
+            pLoc += pins->Length;
+            pDst += pins->Length;
         }
 
-        if(can_memcpy) {
-            memcpy(dst+ret, src+ret, size);
-        }
-        ret += size;
+        CloseDisassembler(&dis);
     }
-
-    return ret;
+    return len;
 }
 
 void dpPatch(dpPatchData &pi)
 {
     // 元コードの退避先
-    BYTE *preserved = (BYTE*)::VirtualAlloc(NULL, 32, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    BYTE *preserved = (BYTE*)::dpAllocate(32, pi.symbol.address);
     BYTE *f = (BYTE*)pi.symbol.address;
     DWORD old;
     ::VirtualProtect(f, 32, PAGE_EXECUTE_READWRITE, &old);
@@ -88,11 +66,14 @@ void dpPatch(dpPatchData &pi)
     // 元のコードをコピー & 最後にコピー本へ jmp するコードを付加 (==これを call すれば上書き前の動作をするハズ)
     size_t slice = CopyInstructions(preserved, f, 5);
     preserved[slice]=0xE9; // jmp
-    *(DWORD*)(preserved+slice+1) = (ptrdiff_t)(f+slice)-(ptrdiff_t)(preserved+slice)-5;
+    *(DWORD*)(preserved+slice+1) = (DWORD)((ptrdiff_t)(f+slice)-(ptrdiff_t)(preserved+slice)-5);
+    for(size_t i=slice+5; i<32; ++i) {
+        preserved[i] = 0x90;
+    }
 
     // 関数の先頭を hook 関数への jmp に書き換える
     f[0] = 0xE9; // jmp
-    *(DWORD*)(f+1) = (ptrdiff_t)pi.hook-(ptrdiff_t)f - 5;
+    *(DWORD*)(f+1) = (DWORD)((ptrdiff_t)pi.hook-(ptrdiff_t)f - 5);
     ::VirtualProtect(f, 32, old, &old);
 
     pi.orig = preserved;

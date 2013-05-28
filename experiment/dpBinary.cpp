@@ -4,6 +4,7 @@
 
 #include "DynamicPatcher.h"
 
+typedef unsigned long long QWORD;
 const char g_symname_onload[]   = dpSymPrefix "dpOnLoadHandler";
 const char g_symname_onunload[] = dpSymPrefix "dpOnUnloadHandler";
 
@@ -228,7 +229,7 @@ inline const char* GetSymbolName(PSTR StringTable, PIMAGE_SYMBOL Sym)
 bool dpObjFile::loadFile(const char *path)
 {
     dpTime mtime = dpGetFileModifiedTime(path);
-    if(m_symbols.getNumSymbols()>0 && mtime<m_mtime) { return true; }
+    if(m_symbols.getNumSymbols()>0 && mtime<=m_mtime) { return true; }
 
     void *data;
     size_t size;
@@ -240,7 +241,7 @@ bool dpObjFile::loadFile(const char *path)
 
 bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mtime)
 {
-    if(m_symbols.getNumSymbols()>0 && mtime<m_mtime) { return true; }
+    if(m_symbols.getNumSymbols()>0 && mtime<=m_mtime) { return true; }
     m_path = path;
     m_data = data;
     m_size = size;
@@ -253,7 +254,7 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
 #else
     if( pDosHeader->e_magic!=IMAGE_FILE_MACHINE_I386 || pDosHeader->e_sp!=0 ) {
 #endif
-        dpPrint("dp fatal: %s 認識できないフォーマットです。/GL (プログラム全体の最適化) 有効でコンパイルされている可能性があります。\n"
+        dpPrint("dp fatal: %s unknown file format. it might be compiled with /GL option.\n"
             , m_path.c_str());
         ::DebugBreak();
         return false;
@@ -302,7 +303,7 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
         //const char *name = GetSymbolName(StringTable, sym);
         if(sym->SectionNumber>0) {
             IMAGE_SECTION_HEADER &sect = pSectionHeader[sym->SectionNumber-1];
-            void *data = (void*)(ImageBase + sect.PointerToRawData + sym->Value);
+            void *data = (void*)(ImageBase + (int)sect.PointerToRawData + sym->Value);
             if(sym->SectionNumber==IMAGE_SYM_UNDEFINED) { continue; }
             const char *name = GetSymbolName(StringTable, sym);
             m_symbols.addSymbol(name, data);
@@ -330,17 +331,17 @@ bool dpObjFile::link()
 
     for(size_t si=0; si<pImageHeader->NumberOfSections; ++si) {
         IMAGE_SECTION_HEADER &sect = pSectionHeader[si];
-        size_t SectionBase = (size_t)(ImageBase + sect.PointerToRawData);
+        size_t SectionBase = (size_t)(ImageBase + (int)sect.PointerToRawData);
 
         DWORD NumRelocations = sect.NumberOfRelocations;
         DWORD FirstRelocation = 0;
         // NumberOfRelocations==0xffff の場合、最初の IMAGE_RELOCATION に実際の値が入っている。(NumberOfRelocations は 16bit のため)
         if(sect.NumberOfRelocations==0xffff && (sect.Characteristics&IMAGE_SCN_LNK_NRELOC_OVFL)!=0) {
-            NumRelocations = ((PIMAGE_RELOCATION)(ImageBase + sect.PointerToRelocations))[0].RelocCount;
+            NumRelocations = ((PIMAGE_RELOCATION)(ImageBase + (int)sect.PointerToRelocations))[0].RelocCount;
             FirstRelocation = 1;
         }
 
-        PIMAGE_RELOCATION pRelocation = (PIMAGE_RELOCATION)(ImageBase + sect.PointerToRelocations);
+        PIMAGE_RELOCATION pRelocation = (PIMAGE_RELOCATION)(ImageBase + (int)sect.PointerToRelocations);
         for(size_t ri=FirstRelocation; ri<NumRelocations; ++ri) {
             PIMAGE_RELOCATION pReloc = pRelocation + ri;
             PIMAGE_SYMBOL rsym = pSymbolTable + pReloc->SymbolTableIndex;
@@ -348,7 +349,7 @@ bool dpObjFile::link()
             size_t rdata = (size_t)dpResolveExternalSymbol(this, rname);
             if(rdata==NULL) {
                 char buf[1024];
-                _snprintf(buf, _countof(buf), "dp fatal: %s が参照するシンボル %s を解決できませんでした。\n", m_path.c_str(), rname);
+                _snprintf(buf, _countof(buf), "dp fatal: symbol %s referenced by %s could not be resolved.\n", rname, m_path.c_str());
                 mes += buf;
                 ret = false;
                 continue;
@@ -405,7 +406,7 @@ bool dpObjFile::link()
                 break;
 #endif // _WIN64
             default:
-                dpPrint("dp warning: 未知の IMAGE_RELOCATION::Type 0x%x\n", pReloc->Type);
+                dpPrint("dp warning: unknown IMAGE_RELOCATION::Type 0x%x\n", pReloc->Type);
                 break;
             }
         }
@@ -481,6 +482,7 @@ bool dpLibFile::loadMemory(const char *path, void *lib_data, size_t lib_size, dp
 
     char *base = (char*)lib_data;
     if(strncmp(base, IMAGE_ARCHIVE_START, IMAGE_ARCHIVE_START_SIZE)!=0) {
+        dpPrint("do error: unknown file format %s\n", path);
         return false;
     }
     base += IMAGE_ARCHIVE_START_SIZE;
