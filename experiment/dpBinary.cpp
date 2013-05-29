@@ -613,9 +613,42 @@ bool dpDllFile::loadFile(const char *path)
     dpTime mtime = dpGetFileModifiedTime(path);
     if(m_module && m_path==path && mtime<=m_mtime) { return true; }
 
-    // todo: 指定ファイルそのまま使うのではなく、コピーしてそれ使うようにする
-    HMODULE module = ::LoadLibraryA(path);
+    // ロード中の dll と関連する pdb はロックがかかってしまい、リビルドに失敗するようになるため、
+    // 一時ファイルにコピーする処理をここで行う。
+    // dll に含まれる .pdb のパスを書き換えてコピーしないといけない。
 
+    // dll をメモリに map
+    void *data = nullptr;
+    size_t datasize = 0;
+    if(!dpMapFile(path, data, datasize, malloc)) { return false; }
+
+    // 一時ファイル名を算出
+    char rev[8] = {0};
+    for(int i=0; i<32; ++i) {
+        _snprintf(rev, _countof(rev), "%x", i);
+        m_path = path;
+        m_actual_file.clear();
+        std::string ext;
+        dpSeparateFileExt(path, &m_actual_file, &ext);
+        m_actual_file+=rev;
+        m_actual_file+=".";
+        m_actual_file+=ext;
+        if(!dpFileExists(m_actual_file.c_str())) { break; }
+    }
+
+    // pdb のパスを抽出。あればパスを書き換え、書き換え後のパスに元ファイルをコピー
+    if(char *pdb=dpGetPDBPathFromModule(data, true)) {
+        std::string before;
+        before = pdb;
+        strncpy(pdb+before.size()-3, rev, 3);
+        m_pdb_path = pdb;
+        dpCopyFile(before.c_str(), m_pdb_path.c_str());
+    }
+    // dll を一時ファイルにコピー
+    dpWriteFile(m_actual_file.c_str(), data, datasize);
+    free(data);
+
+    HMODULE module = ::LoadLibraryA(m_actual_file.c_str());
     if(loadMemory(path, module, 0, mtime)) {
         m_needs_freelibrary = true;
         return true;
@@ -643,6 +676,8 @@ void dpDllFile::unload()
 {
     if(m_module && m_needs_freelibrary) {
         ::FreeLibrary(m_module);
+        dpDeleteFile(m_actual_file.c_str()); m_actual_file.clear();
+        dpDeleteFile(m_pdb_path.c_str()); m_pdb_path.clear();
     }
     m_needs_freelibrary = false;
     m_symbols.clear();

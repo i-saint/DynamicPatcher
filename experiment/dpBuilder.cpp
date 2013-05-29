@@ -163,7 +163,7 @@ void dpBuilder::update()
 
         size_t num_loaded = 0;
         for(size_t i=0; i<m_loadpathes.size(); ++i) {
-            dpGlob(m_loadpathes[i], [&](const std::string &path){
+            dpGlob(m_loadpathes[i].c_str(), [&](const std::string &path){
                 if(dpGetLoader()->loadBinary(path.c_str())) {
                     ++num_loaded;
                 }

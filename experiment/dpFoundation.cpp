@@ -73,3 +73,99 @@ bool dpDemangle(const char *mangled, char *demangled, size_t buflen)
 {
     return ::UnDecorateSymbolName(mangled, demangled, (DWORD)buflen, UNDNAME_COMPLETE)!=0;
 }
+
+// fill_gap: .dll ファイルをそのままメモリに移した場合はこれを true にする必要があります。
+// LoadLibrary() で正しくロードしたものは section の再配置が行われ、元ファイルとはデータの配置にズレが生じます。
+// fill_gap==true の場合このズレを補正します。
+char* dpGetPDBPathFromModule(void *pModule, bool fill_gap)
+{
+    if(!pModule) { return nullptr; }
+
+    struct CV_INFO_PDB70
+    {
+        DWORD  CvSignature;
+        GUID Signature;
+        DWORD Age;
+        BYTE PdbFileName[1];
+    };
+
+    PBYTE pData = (PUCHAR)pModule;
+    PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)pData;
+    PIMAGE_NT_HEADERS pNtHeaders = (PIMAGE_NT_HEADERS)(pData + pDosHeader->e_lfanew);
+    if(pDosHeader->e_magic==IMAGE_DOS_SIGNATURE && pNtHeaders->Signature==IMAGE_NT_SIGNATURE) {
+        ULONG DebugRVA = pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_DEBUG].VirtualAddress;
+        if(DebugRVA==0) { return nullptr; }
+
+        PIMAGE_SECTION_HEADER pSectionHeader = IMAGE_FIRST_SECTION(pNtHeaders);
+        for(size_t i=0; i<pNtHeaders->FileHeader.NumberOfSections; ++i) {
+            PIMAGE_SECTION_HEADER s = pSectionHeader+i;
+            if(DebugRVA >= s->VirtualAddress && DebugRVA < s->VirtualAddress+s->SizeOfRawData) {
+                pSectionHeader = s;
+                break;
+            }
+        }
+        if(fill_gap) {
+            DWORD gap = pSectionHeader->VirtualAddress - pSectionHeader->PointerToRawData;
+            pData -= gap;
+        }
+
+        PIMAGE_DEBUG_DIRECTORY pDebug;
+        pDebug = (PIMAGE_DEBUG_DIRECTORY)(pData + DebugRVA);
+        if(DebugRVA!=0 && DebugRVA < pNtHeaders->OptionalHeader.SizeOfImage && pDebug->Type==IMAGE_DEBUG_TYPE_CODEVIEW) {
+            CV_INFO_PDB70 *pCVI = (CV_INFO_PDB70*)(pData + pDebug->AddressOfRawData);
+            if(pCVI->CvSignature=='SDSR') {
+                return (char*)pCVI->PdbFileName;
+            }
+        }
+    }
+    return nullptr;
+}
+
+bool dpCopyFile(const char *srcpath, const char *dstpath)
+{
+    return ::CopyFileA(srcpath, dstpath, FALSE)==TRUE;
+}
+
+bool dpWriteFile(const char *path, const void *data, size_t size)
+{
+    if(FILE *f=fopen(path, "wb")) {
+        fwrite((const char*)data, 1, size, f);
+        fclose(f);
+        return true;
+    }
+    return false;
+}
+
+bool dpDeleteFile(const char *path)
+{
+    return ::DeleteFileA(path)==TRUE;
+}
+
+bool dpFileExists( const char *path )
+{
+    return ::GetFileAttributesA(path)!=INVALID_FILE_ATTRIBUTES;
+}
+
+size_t dpSeparateDirFile(const char *path, std::string *dir, std::string *file)
+{
+    size_t f_len=0;
+    size_t l = strlen(path);
+    for(size_t i=0; i<l; ++i) {
+        if(path[i]=='\\' || path[i]=='/') { f_len=i+1; }
+    }
+    if(dir)  { dir->insert(dir->end(), path, path+f_len); }
+    if(file) { file->insert(file->end(), path+f_len, path+l); }
+    return f_len;
+}
+
+size_t dpSeparateFileExt(const char *filename, std::string *file, std::string *ext)
+{
+    size_t dir_len=0;
+    size_t l = strlen(filename);
+    for(size_t i=0; i<l; ++i) {
+        if(filename[i]=='.') { dir_len=i+1; }
+    }
+    if(file){ file->insert(file->end(), filename, filename+dir_len); }
+    if(ext) { ext->insert(ext->end(), filename+dir_len, filename+l); }
+    return dir_len;
+}

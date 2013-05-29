@@ -174,6 +174,7 @@ private:
     bool m_needs_freelibrary;
     std::string m_path;
     std::string m_actual_file;
+    std::string m_pdb_path;
     dpTime m_mtime;
     dpSymbolTable m_symbols;
 };
@@ -307,19 +308,25 @@ void*   dpAllocateModule(size_t size);
 dpTime  dpGetFileModifiedTime(const char *path);
 bool    dpDemangle(const char *mangled, char *demangled, size_t buflen);
 
+char* dpGetPDBPathFromModule(void *pModule, bool fill_gap=false);
+bool dpCopyFile(const char *srcpath, const char *dstpath);
+
+template<class F> void dpGlob(const char *path, const F &f);
+template<class F> bool dpMapFile(const char *path, void *&o_data, size_t &o_size, const F &alloc);
+bool dpWriteFile(const char *path, const void *data, size_t size);
+bool dpDeleteFile(const char *path);
+bool dpFileExists(const char *path);
+
+size_t dpSeparateDirFile(const char *path, std::string *dir, std::string *file);
+size_t dpSeparateFileExt(const char *filename, std::string *file, std::string *ext);
 
 template<class F>
-inline void dpGlob(const std::string &path, const F &f)
+inline void dpGlob(const char *path, const F &f)
 {
     std::string dir;
-    size_t dir_len=0;
-    for(size_t l=0; l<path.size(); ++l) {
-        if(path[l]=='\\' || path[l]=='/') { dir_len=l+1; }
-    }
-    dir.insert(dir.end(), path.begin(), path.begin()+dir_len);
-
+    dpSeparateDirFile(path, &dir, nullptr);
     WIN32_FIND_DATAA wfdata;
-    HANDLE handle = ::FindFirstFileA(path.c_str(), &wfdata);
+    HANDLE handle = ::FindFirstFileA(path, &wfdata);
     if(handle!=INVALID_HANDLE_VALUE) {
         do {
             f( dir+wfdata.cFileName );
