@@ -54,7 +54,7 @@ dpLoader::dpLoader()
 
 dpLoader::~dpLoader()
 {
-    m_hostsymbols.eachSymbols([](const dpSymbol &sym){ delete[] sym.name; });
+    m_hostsymbols.eachSymbols([&](const dpSymbol &sym){ delete[] sym.name; });
     eachBinaries([](dpBinary *bin){ delete bin; });
     m_binaries.clear();
 }
@@ -137,6 +137,19 @@ dpBinary* dpLoader::loadBinary(const char *path)
         ret = nullptr;
     }
     return ret;
+}
+
+bool dpLoader::unloadBinary( const char *path )
+{
+    auto p = std::find_if(m_binaries.begin(), m_binaries.end(),
+        [=](dpBinary *b){ return _stricmp(b->getPath(), path)==0; }
+    );
+    if(p!=m_binaries.end()) {
+        delete *p;
+        m_binaries.erase(p);
+        return true;
+    }
+    return false;
 }
 
 const dpSymbol* dpLoader::findLoadedSymbolByName(const char *name)

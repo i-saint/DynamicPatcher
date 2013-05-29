@@ -463,6 +463,7 @@ bool dpLibFile::loadMemory(const char *path, void *lib_data, size_t lib_size, dp
     }
     base += IMAGE_ARCHIVE_START_SIZE;
 
+    size_t num_loaded = 0;
     char *name_section = NULL;
     char *first_linker_member = NULL;
     char *second_linker_member = NULL;
@@ -471,7 +472,7 @@ bool dpLibFile::loadMemory(const char *path, void *lib_data, size_t lib_size, dp
         base += sizeof(IMAGE_ARCHIVE_MEMBER_HEADER);
 
         std::string name;
-        void *data;
+        void *data = nullptr;
         DWORD32 mtime, size;
         sscanf((char*)header->Date, "%d", &mtime);
         sscanf((char*)header->Size, "%d", &size);
@@ -498,25 +499,21 @@ bool dpLibFile::loadMemory(const char *path, void *lib_data, size_t lib_size, dp
                 name = std::string((char*)header->Name, s);
             }
 
-            dpObjFile *obj = findObjFile(name.c_str());
-            if(obj) {
-                if(mtime <= obj->getLastModifiedTime()) {
-                    goto GO_NEXT;
-                }
-                else {
-                    if(obj->loadMemory(name.c_str(), data, size, mtime)) {
-                        m_symbols.merge(obj->getSymbolTable());
-                    }
-                }
+            dpObjFile *old = findObjFile(name.c_str());
+            if(old && mtime<=old->getLastModifiedTime()) {
+                goto GO_NEXT;
             }
             else {
                 data = dpAllocateModule(size);
                 memcpy(data, base, size);
                 dpObjFile *obj = new dpObjFile();
                 if(obj->loadMemory(name.c_str(), data, size, mtime)) {
-                    m_symbols.merge(obj->getSymbolTable());
-                    m_exports.merge(obj->getExportTable());
+                    if(old) {
+                        m_objs.erase(std::find(m_objs.begin(), m_objs.end(), old));
+                        delete old;
+                    }
                     m_objs.push_back(obj);
+                    ++num_loaded;
                 }
                 else {
                     delete obj;
@@ -527,6 +524,15 @@ bool dpLibFile::loadMemory(const char *path, void *lib_data, size_t lib_size, dp
 GO_NEXT:
         base += size;
         base = (char*)((size_t)base+1 & ~1); // 2 byte align
+    }
+
+    if(num_loaded) {
+        m_symbols.clear();
+        m_exports.clear();
+        eachObjs([&](dpObjFile *o){
+            m_symbols.merge(o->getSymbolTable());
+            m_exports.merge(o->getExportTable());
+        });
     }
 
     return true;
@@ -541,8 +547,9 @@ void dpLibFile::unload()
 
 bool dpLibFile::link()
 {
-    eachObjs([](dpObjFile *o){ o->link(); });
-    return false;
+    bool ret = true;
+    eachObjs([&](dpObjFile *o){ if(!o->link()){ ret=false; } });
+    return ret;
 }
 
 const dpSymbolTable& dpLibFile::getSymbolTable() const      { return m_symbols; }
@@ -616,7 +623,7 @@ bool dpDllFile::loadFile(const char *path)
     return false;
 }
 
-bool dpDllFile::loadMemory(const char *path, void *data, size_t datasize, dpTime mtime)
+bool dpDllFile::loadMemory(const char *path, void *data, size_t /*datasize*/, dpTime mtime)
 {
     if(data==nullptr) { return false; }
     if(m_module && m_path==path && mtime<=m_mtime) { return true; }

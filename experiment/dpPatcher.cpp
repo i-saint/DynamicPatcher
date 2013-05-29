@@ -24,8 +24,10 @@ static size_t CopyInstructions(void *dst, void *src, size_t minlen)
         U8* pDst = (U8*)dst;
         DWORD dwFlags = DISASM_SUPPRESSERRORS;
 
-        while( len<minlen && (pins=GetInstruction(&dis, (ULONG_PTR)pLoc, pLoc, dwFlags)) ) {
-            if(pins->Type == ITYPE_RET		) break;
+        while( len<minlen ) {
+            pins = GetInstruction(&dis, (ULONG_PTR)pLoc, pLoc, dwFlags);
+            if(!pins) { break; }
+            if(pins->Type == ITYPE_RET ) { break; }
 
             //// todo: call or jmp
             //if(pins->Type == ITYPE_BRANCH	) break;

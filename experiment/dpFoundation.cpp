@@ -71,5 +71,5 @@ dpTime dpGetFileModifiedTime(const char *path)
 
 bool dpDemangle(const char *mangled, char *demangled, size_t buflen)
 {
-    return ::UnDecorateSymbolName(mangled, demangled, buflen, UNDNAME_COMPLETE)!=0;
+    return ::UnDecorateSymbolName(mangled, demangled, (DWORD)buflen, UNDNAME_COMPLETE)!=0;
 }

@@ -9,10 +9,10 @@
 #include <clocale>
 #include <algorithm>
 
-#define dpLinkDynamic
 //#define dpDisable
+//#define dpLinkStatic
+#define dpLinkDynamic
 #include "../DynamicPatcher.h"
-
 
 #ifdef _WIN64
 #   define dpPlatform "x64"
@@ -24,7 +24,7 @@
 #else
 #   define dpConfiguration "Release"
 #endif
-#define dpObjDir "_tmp/Test1_" dpPlatform dpConfiguration 
+#define dpObjDir "_tmp/Test_Simple_" dpPlatform dpConfiguration 
 
 // __declspec(dllexport) がついてる関数や class には export 属性が .obj にも残る。
 // これを利用し、export 属性が付いているものはロードされた時自動的に patch する。
@@ -35,7 +35,7 @@ int puts_hook(const char *s)
 {
     typedef int (*puts_t)(const char *s);
     puts_t orig_puts = (puts_t)dpGetUnpatchedFunction(&puts);
-    orig_puts("puts_hooooook()");
+    orig_puts("puts_hook()");
     return orig_puts(s);
 }
 )
@@ -68,13 +68,13 @@ int main(int argc, char *argv[])
 {
     dpInitialize();
     dpAddLoadPath(dpObjDir"/*.obj");
-    dpAddSourcePath("Test1");
-    dpStartAutoCompile("Test1.vcxproj /target:ClCompile /m /p:Configuration="dpConfiguration";Platform="dpPlatform, false);
+    dpAddSourcePath("Test_Simple");
+    dpStartAutoCompile("Test_Simple.vcxproj /target:ClCompile /m /p:Configuration="dpConfiguration";Platform="dpPlatform, false);
 
     dpLoad(dpObjDir"/*.obj");
     dpLink();
 
-    printf("DynamicPatcher Test1\n");
+    printf("DynamicPatcher Test_Simple\n");
     {
         Test test;
         while(!test.getEndFlag()) {
@@ -90,5 +90,5 @@ int main(int argc, char *argv[])
 
 dpOnLoad(
     dpPatchByAddress(&puts, &puts_hook);
-    //dpPatchByFile(dpObjDir"/Test1.obj", ".*Test.*");
+    //dpPatchByFile(dpObjDir"/Test_Simple.obj", ".*Test.*");
 )

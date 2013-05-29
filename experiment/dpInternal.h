@@ -55,7 +55,7 @@ public:
 
     // F: [](const dpSymbol &sym)
     template<class F>
-    void eachSymbols(F &f) const
+    void eachSymbols(const F &f) const
     {
         size_t n = getNumSymbols();
         for(size_t i=0; i<n; ++i) { f(*getSymbol(i)); }
@@ -186,6 +186,7 @@ public:
     ~dpLoader();
 
     dpBinary* loadBinary(const char *path); // path to .obj, .lib, .dll, .exe
+    bool      unloadBinary(const char *path);
     bool      link();
 
     size_t    getNumBinaries() const;

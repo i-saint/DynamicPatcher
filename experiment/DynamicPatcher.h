@@ -10,36 +10,36 @@
 #include <cstring>
 #include <functional>
 
-#define dpDLLExport __declspec(dllexport)
-#define dpDLLImport __declspec(dllimport)
-#define dpCLinkage extern "C"
+#ifdef _WIN64
+#   define dpLibArch "64"
+#   define dpSymPrefix
+#else // _WIN64
+#   define dpLibArch 
+#   define dpSymPrefix "_"
+#endif //_WIN64
+#ifdef _DEBUG
+#   define dpLibConfig "d"
+#else // _DEBUG
+#   define dpLibConfig 
+#endif //_DEBUG
 
 #if defined(dpDLLImpl)
 #   define dpAPI dpDLLExport
 #elif defined(dpLinkDynamic)
 #   define dpAPI dpDLLImport
-#   ifdef _WIN64
-#       pragma comment(lib,"DynamicPatcher64.lib")
-#   else // _WIN64
-#       pragma comment(lib,"DynamicPatcher.lib")
-#   endif // _WIN64
+#   pragma comment(lib,"DynamicPatcher" dpLibArch ".lib")
+#elif defined(dpLinkStatic)
+#   define dpAPI
+#   pragma comment(lib,"DynamicPatchers" dpLibConfig dpLibArch ".lib")
 #else
 #   define dpAPI
-#   ifdef _WIN64
-#       pragma comment(lib,"DynamicPatcher64s.lib")
-#   else // _WIN64
-#       pragma comment(lib,"DynamicPatchers.lib")
-#   endif // _WIN64
 #endif // dpDLL_Impl
 
-#ifdef _WIN64
-#   define dpSymPrefix
-#else // _WIN64
-#   define dpSymPrefix "_"
-#endif // _WIN64
-
-
+#define dpDLLExport     __declspec(dllexport)
+#define dpDLLImport     __declspec(dllimport)
+#define dpCLinkage      extern "C"
 #define dpPatch         dpDLLExport
+#define dpNoInline      __declspec(noinline)
 #define dpScope(...)    __VA_ARGS__
 #define dpOnLoad(...)   dpCLinkage static void dpOnLoadHandler()  { __VA_ARGS__ } __declspec(selectany) void *_dpOnLoadHandler  =dpOnLoadHandler;
 #define dpOnUnload(...) dpCLinkage static void dpOnUnloadHandler(){ __VA_ARGS__ } __declspec(selectany) void *_dpOnUnloadHandler=dpOnUnloadHandler;
