@@ -39,9 +39,10 @@ dpNoInline void OverriddenByDll()
 int main(int argc, char *argv[])
 {
     dpInitialize();
-    dpLoad("Test_Dll.dll");
-    dpLoad("Test_Lib.lib");
-    dpLink();
+    dpAddLoadPath("Test_Dll.dll");
+    dpAddLoadPath("Test_Lib.lib");
+    dpAddSourcePath("Test_LibDll");
+    dpStartAutoBuild("Test_LibDll.sln /target:Build /m /p:Configuration="dpConfiguration";Platform="dpPlatform, false);
 
     printf("DynamicPatcher Test_UseLibDll\n");
     for(;;) {

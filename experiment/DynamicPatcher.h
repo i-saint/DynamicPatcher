@@ -81,8 +81,8 @@ dpAPI void*  dpGetUnpatchedFunction(void *target);
 
 dpAPI void   dpAddLoadPath(const char *path); // accept wildcard (x64/Debug/*.obj)
 dpAPI void   dpAddSourcePath(const char *path);
-dpAPI bool   dpStartAutoCompile(const char *msbuild_option, bool console=false);
-dpAPI bool   dpStopAutoCompile();
+dpAPI bool   dpStartAutoBuild(const char *msbuild_option, bool console=false);
+dpAPI bool   dpStopAutoBuild();
 dpAPI void   dpUpdate();
 
 #else  // dpDisable
@@ -103,8 +103,8 @@ dpAPI void   dpUpdate();
 
 #define dpAddLoadPath(...) 
 #define dpAddSourcePath(...) 
-#define dpStartAutoCompile(...) 
-#define dpStopAutoCompile(...) 
+#define dpStartAutoBuild(...) 
+#define dpStopAutoBuild(...) 
 #define dpUpdate(...) 
 
 #endif // dpDisable

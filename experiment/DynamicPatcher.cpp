@@ -137,12 +137,12 @@ dpAPI void dpAddSourcePath(const char *path)
     dpGetBuilder()->addSourcePath(path);
 }
 
-dpAPI bool dpStartAutoCompile(const char *option, bool console)
+dpAPI bool dpStartAutoBuild(const char *option, bool console)
 {
     return dpGetBuilder()->startAutoCompile(option, console);
 }
 
-dpAPI bool dpStopAutoCompile()
+dpAPI bool dpStopAutoBuild()
 {
     return dpGetBuilder()->stopAutoCompile();
 }

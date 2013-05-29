@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
     dpInitialize();
     dpAddLoadPath(dpObjDir"/*.obj");
     dpAddSourcePath("Test_Simple");
-    dpStartAutoCompile("Test_Simple.vcxproj /target:ClCompile /m /p:Configuration="dpConfiguration";Platform="dpPlatform, false);
+    dpStartAutoBuild("Test_Simple.vcxproj /target:ClCompile /m /p:Configuration="dpConfiguration";Platform="dpPlatform, false);
 
     dpLoad(dpObjDir"/*.obj");
     dpLink();
