@@ -28,10 +28,9 @@ void dpPrint(const char* fmt, ...)
 }
 
 
-
 // 位置指定版 VirtualAlloc()
-// location より前の最寄りの位置にメモリを確保する。
-void* dpAllocate(size_t size, void *location)
+// location より大きいアドレスの最寄りの位置にメモリを確保する。
+void* dpAllocateForward(size_t size, void *location)
 {
     if(size==0) { return NULL; }
     static size_t base = (size_t)location;
@@ -39,6 +38,21 @@ void* dpAllocate(size_t size, void *location)
     // ドキュメントには、アドレス指定の VirtualAlloc() は指定先が既に予約されている場合最寄りの領域を返す、
     // と書いてるように見えるが、実際には NULL が返ってくるようにしか見えない。
     // なので成功するまでアドレスを進めつつリトライ…。
+    void *ret = NULL;
+    const size_t step = 0x10000; // 64kb
+    for(size_t i=0; ret==NULL; ++i) {
+        ret = ::VirtualAlloc((void*)((size_t)base+(step*i)), size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    }
+    return ret;
+}
+
+// 位置指定版 VirtualAlloc()
+// location より小さいアドレスの最寄りの位置にメモリを確保する。
+void* dpAllocateBackward(size_t size, void *location)
+{
+    if(size==0) { return NULL; }
+    static size_t base = (size_t)location;
+
     void *ret = NULL;
     const size_t step = 0x10000; // 64kb
     for(size_t i=0; ret==NULL; ++i) {
@@ -53,7 +67,7 @@ void* dpAllocate(size_t size, void *location)
 // .exe がマップされている領域を調べ、その近くに VirtualAlloc() するという内容。
 void* dpAllocateModule(size_t size)
 {
-    return dpAllocate(size, GetModuleHandleA(nullptr));
+    return dpAllocateBackward(size, GetModuleHandleA(nullptr));
 }
 
 dpTime dpGetFileModifiedTime(const char *path)
@@ -168,4 +182,80 @@ size_t dpSeparateFileExt(const char *filename, std::string *file, std::string *e
     if(file){ file->insert(file->end(), filename, filename+dir_len); }
     if(ext) { ext->insert(ext->end(), filename+dir_len, filename+l); }
     return dir_len;
+}
+
+
+dpSectionAllocator::dpSectionAllocator(void *data, size_t size)
+    : m_data(data), m_size(size), m_used(0)
+{}
+
+void* dpSectionAllocator::allocate(size_t size, size_t align)
+{
+    size_t base = (size_t)m_data;
+    size_t mask = align - 1;
+    size_t aligned = (base + m_used + mask) & ~mask;
+    if(aligned+size <= base+m_size) {
+        m_used = (aligned+size) - base;
+        return m_data==NULL ? NULL : (void*)aligned;
+    }
+    return NULL;
+}
+
+size_t dpSectionAllocator::getUsed() const { return m_used; }
+
+
+
+class dpPatchAllocator::Page
+{
+public:
+    struct Block {
+        union {
+            char data[32];
+            void *next;
+        };
+    };
+    Page(void *base, size_t size);
+    ~Page();
+    void* allocate();
+    bool deallocate(void *v);
+
+private:
+    void *data;
+    size_t size;
+};
+
+dpPatchAllocator::Page::Page(void *base, size_t size)
+{
+}
+
+dpPatchAllocator::Page::~Page()
+{
+}
+
+void* dpPatchAllocator::Page::allocate()
+{
+    return nullptr;
+}
+
+bool dpPatchAllocator::Page::deallocate(void *v)
+{
+    return false;
+}
+
+dpPatchAllocator::dpPatchAllocator()
+{
+}
+
+dpPatchAllocator::~dpPatchAllocator()
+{
+}
+
+void* dpPatchAllocator::allocate()
+{
+    return nullptr;
+}
+
+bool dpPatchAllocator::deallocate(void *v)
+{
+    return false;
 }

@@ -61,7 +61,7 @@ static size_t CopyInstructions(void *dst, void *src, size_t minlen)
 void Patch(dpPatchData &pi)
 {
     // 元コードの退避先
-    BYTE *preserved = (BYTE*)::dpAllocate(32, pi.symbol.address);
+    BYTE *preserved = (BYTE*)::dpAllocateBackward(32, pi.symbol.address);
     BYTE *f = (BYTE*)pi.symbol.address;
     DWORD old;
     ::VirtualProtect(f, 32, PAGE_EXECUTE_READWRITE, &old);

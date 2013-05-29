@@ -303,7 +303,8 @@ dpAPI DynamicPatcher* dpGetInstance();
 
 
 void    dpPrint(const char* fmt, ...);
-void*   dpAllocate(size_t size, void *location);
+void*   dpAllocateForward(size_t size, void *location);
+void*   dpAllocateBackward(size_t size, void *location);
 void*   dpAllocateModule(size_t size);
 dpTime  dpGetFileModifiedTime(const char *path);
 bool    dpDemangle(const char *mangled, char *demangled, size_t buflen);
@@ -319,6 +320,37 @@ bool dpFileExists(const char *path);
 
 size_t dpSeparateDirFile(const char *path, std::string *dir, std::string *file);
 size_t dpSeparateFileExt(const char *filename, std::string *file, std::string *ext);
+
+// アラインが必要な section データを再配置するための単純なアロケータ
+class dpSectionAllocator
+{
+public:
+    // data=NULL, size_t size=0xffffffff で初期化した場合、必要な容量を調べるのに使える
+    dpSectionAllocator(void *data=NULL, size_t size=0xffffffff);
+    // align: 2 の n 乗である必要がある
+    void* allocate(size_t size, size_t align);
+    size_t getUsed() const;
+private:
+    void *m_data;
+    size_t m_size;
+    size_t m_used;
+};
+
+class dpPatchAllocator
+{
+public:
+    dpPatchAllocator();
+    ~dpPatchAllocator();
+    void* allocate();
+    bool deallocate(void *v);
+
+private:
+    static const size_t page_size = 1024*64;
+    class Page;
+    typedef std::vector<Page*> page_cont;
+    page_cont m_pages;
+};
+
 
 template<class F>
 inline void dpGlob(const char *path, const F &f)

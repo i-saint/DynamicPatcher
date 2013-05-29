@@ -11,34 +11,6 @@ const char g_symname_onload[]   = dpSymPrefix "dpOnLoadHandler";
 const char g_symname_onunload[] = dpSymPrefix "dpOnUnloadHandler";
 
 
-// アラインが必要な section データを再配置するための単純なアロケータ
-class dpSectionAllocator
-{
-public:
-    // data=NULL, size_t size=0xffffffff で初期化した場合、必要な容量を調べるのに使える
-    dpSectionAllocator(void *data=NULL, size_t size=0xffffffff) : m_data(data), m_size(size), m_used(0)
-    {}
-
-    // align: 2 の n 乗である必要がある
-    void* allocate(size_t size, size_t align)
-    {
-        size_t base = (size_t)m_data;
-        size_t mask = align - 1;
-        size_t aligned = (base + m_used + mask) & ~mask;
-        if(aligned+size <= base+m_size) {
-            m_used = (aligned+size) - base;
-            return m_data==NULL ? NULL : (void*)aligned;
-        }
-        return NULL;
-    }
-
-    size_t getUsed() const { return m_used; }
-
-private:
-    void *m_data;
-    size_t m_size;
-    size_t m_used;
-};
 
 void* dpResolveExternalSymbol( dpBinary *bin, const char *name )
 {
@@ -255,7 +227,7 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
 
         if(ti==0) {
             m_aligned_datasize = salloc.getUsed();
-            m_aligned_data = dpAllocate(m_aligned_datasize, m_data);
+            m_aligned_data = dpAllocateForward(m_aligned_datasize, m_data);
         }
     }
 
