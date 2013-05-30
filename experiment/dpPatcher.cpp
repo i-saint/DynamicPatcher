@@ -99,6 +99,8 @@ void dpPatcher::patch(dpPatchData &pi)
     size_t slice = dpCopyInstructions(preserved, target, 5);
     dpAddJumpInstruction(preserved+slice, target+slice);
 
+    // 距離が 32bit に収まらない場合、長距離 jmp で飛ぶコードを挟む。
+    // (長距離 jmp は 14byte 必要なので直接書き込もうとすると容量が足りない可能性が出てくる)
     DWORD_PTR dwDistance = hook < target ? target - hook : hook - target;
     if(dwDistance > 0x7fff0000) {
         BYTE *trampoline = (BYTE*)m_palloc.allocate(target);
