@@ -623,7 +623,7 @@ bool dpDllFile::loadFile(const char *path)
 
     // 一時ファイル名を算出
     char rev[8] = {0};
-    for(int i=0; i<32; ++i) {
+    for(int i=0; i<0xfff; ++i) {
         _snprintf(rev, _countof(rev), "%x", i);
         m_path = path;
         m_actual_file.clear();

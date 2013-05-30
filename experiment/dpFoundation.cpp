@@ -260,6 +260,7 @@ void* dpPatchAllocator::Page::allocate()
 
 bool dpPatchAllocator::Page::deallocate(void *v)
 {
+    if(v==nullptr) { return false; }
     bool ret = false;
     if(isInsideMemory(v)) {
         Block *b = (Block*)v;

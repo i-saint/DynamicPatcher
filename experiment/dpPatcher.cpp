@@ -7,18 +7,16 @@
 #include "disasm-lib/disasm.h"
 #include <regex>
 
-static size_t CopyInstructions(void *dst, void *src, size_t minlen)
+static size_t dpCopyInstructions(void *dst, void *src, size_t minlen)
 {
     size_t len = 0;
-#ifdef _WIN64
+#ifdef _M_X64
     ARCHITECTURE_TYPE arch = ARCH_X64;
-#elif defined _WIN32
+#elif defined _M_IX86
     ARCHITECTURE_TYPE arch = ARCH_X86;
-#else
-#   error unsupported platform
 #endif
     DISASSEMBLER dis;
-    if (InitDisassembler(&dis, arch)) {
+    if(InitDisassembler(&dis, arch)) {
         INSTRUCTION* pins = NULL;
         U8* pLoc = (U8*)src;
         U8* pDst = (U8*)dst;
@@ -58,38 +56,76 @@ static size_t CopyInstructions(void *dst, void *src, size_t minlen)
     return len;
 }
 
+static BYTE* dpAddJumpInstruction(BYTE* from, BYTE* to)
+{
+    // 距離が 32bit に収まる範囲であれば、0xe9 RVA
+    // そうでない場合、0xff 0x25 [メモリアドレス] + 対象アドレス
+    // の形式で jmp する必要がある。
+    BYTE* jump_from = from + 5;
+    size_t distance = jump_from > to ? jump_from - to : to - jump_from;
+    if (distance <= 0x7fff0000) {
+        from[0] = 0xe9;
+        from += 1;
+        *((DWORD*)from) = (DWORD)(to - jump_from);
+        from += 4;
+    }
+    else {
+        from[0] = 0xff;
+        from[1] = 0x25;
+        from += 2;
+#ifdef _M_IX86
+        *((DWORD*)from) = (DWORD)(from + 4);
+#elif defined(_M_X64)
+        *((DWORD*)from) = (DWORD)0;
+#endif
+        from += 4;
+        *((DWORD_PTR*)from) = (DWORD_PTR)(to);
+        from += 8;
+    }
+    return from;
+}
+
 void dpPatcher::patch(dpPatchData &pi)
 {
     // 元コードの退避先
-    BYTE *preserved = (BYTE*)m_palloc.allocate(pi.symbol.address);
-    BYTE *f = (BYTE*)pi.symbol.address;
+    BYTE *hook = (BYTE*)pi.hook;
+    BYTE *target = (BYTE*)pi.symbol.address;
+    BYTE *preserved = (BYTE*)m_palloc.allocate(target);
     DWORD old;
-    ::VirtualProtect(f, 32, PAGE_EXECUTE_READWRITE, &old);
+    ::VirtualProtect(target, 32, PAGE_EXECUTE_READWRITE, &old);
+    HANDLE proc = ::GetCurrentProcess();
 
     // 元のコードをコピー & 最後にコピー本へ jmp するコードを付加 (==これを call すれば上書き前の動作をするハズ)
-    size_t slice = CopyInstructions(preserved, f, 5);
-    preserved[slice]=0xE9; // jmp
-    *(DWORD*)(preserved+slice+1) = (DWORD)((ptrdiff_t)(f+slice)-(ptrdiff_t)(preserved+slice)-5);
-    for(size_t i=slice+5; i<32; ++i) {
-        preserved[i] = 0x90;
-    }
+    size_t slice = dpCopyInstructions(preserved, target, 5);
+    dpAddJumpInstruction(preserved+slice, target+slice);
 
-    // 関数の先頭を hook 関数への jmp に書き換える
-    f[0] = 0xE9; // jmp
-    *(DWORD*)(f+1) = (DWORD)((ptrdiff_t)pi.hook-(ptrdiff_t)f - 5);
-    ::VirtualProtect(f, 32, old, &old);
+    DWORD_PTR dwDistance = hook < target ? target - hook : hook - target;
+    if(dwDistance > 0x7fff0000) {
+        BYTE *trampoline = (BYTE*)m_palloc.allocate(target);
+        dpAddJumpInstruction(trampoline, hook);
+        dpAddJumpInstruction(target, trampoline);
+        ::FlushInstructionCache(proc, pi.trampoline, 32);
+        ::FlushInstructionCache(proc, target, 32);
+        pi.trampoline = trampoline;
+    }
+    else {
+        dpAddJumpInstruction(target, hook);
+        ::FlushInstructionCache(proc, target, 32);
+    }
+    ::VirtualProtect(target, 32, old, &old);
 
     pi.orig = preserved;
-    pi.size = slice;
+    pi.hook_size = slice;
 }
 
 void dpPatcher::unpatch(dpPatchData &pi)
 {
     DWORD old;
     ::VirtualProtect(pi.symbol.address, 32, PAGE_EXECUTE_READWRITE, &old);
-    CopyInstructions(pi.symbol.address, pi.orig, pi.size);
+    dpCopyInstructions(pi.symbol.address, pi.orig, pi.hook_size);
     ::VirtualProtect(pi.symbol.address, 32, old, &old);
     m_palloc.deallocate(pi.orig);
+    m_palloc.deallocate(pi.trampoline);
 }
 
 
@@ -116,7 +152,10 @@ void* dpPatcher::patchByName(const char *name, void *hook)
 {
     if(const dpSymbol *sym = dpGetLoader()->findHostSymbolByName(name)) {
         unpatchByAddress(sym->address);
-        dpPatchData pi = {*sym, nullptr, hook, 0};
+
+        dpPatchData pi;
+        pi.symbol = *sym;
+        pi.hook = hook;
         patch(pi);
         m_patches.push_back(pi);
         {
@@ -140,7 +179,10 @@ void* dpPatcher::patchByAddress(void *addr, void *hook)
 {
     if(const dpSymbol *sym=dpGetLoader()->findHostSymbolByAddress(addr)) {
         unpatchByAddress(sym->address);
-        dpPatchData pi = {*sym, nullptr, hook, 0};
+
+        dpPatchData pi;
+        pi.symbol = *sym;
+        pi.hook = hook;
         patch(pi);
         m_patches.push_back(pi);
         {
@@ -210,7 +252,7 @@ dpPatchData* dpPatcher::findPatchByAddress(void *addr)
 {
     dpPatchData *r = nullptr;
     eachPatchData([&](dpPatchData &p){
-        if(p.symbol.address==addr) { r=&p; }
+        if(p.symbol.address==addr || p.hook==addr) { r=&p; }
     });
     return r;
 }

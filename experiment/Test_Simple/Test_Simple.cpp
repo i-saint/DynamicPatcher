@@ -14,7 +14,7 @@
 #define dpLinkDynamic
 #include "../DynamicPatcher.h"
 
-#ifdef _WIN64
+#ifdef _M_X64
 #   define dpPlatform "x64"
 #else
 #   define dpPlatform "Win32"
@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
         while(!test.getEndFlag()) {
             test.doSomething();
 
-            ::Sleep(1000);
+            ::Sleep(3000);
             dpUpdate();
         }
     }

@@ -9,7 +9,7 @@
 #define dpLinkDynamic
 #include "DynamicPatcher.h"
 
-#ifdef _WIN64
+#ifdef _M_X64
 #   define dpPlatform "x64"
 #else
 #   define dpPlatform "Win32"
@@ -22,17 +22,17 @@
 
 dpNoInline void OverriddenByLib1()
 {
-    ::Sleep(1);
+    printf("this will be overridden by lib1\n");
 }
 
 dpNoInline void OverriddenByLib2()
 {
-    ::Sleep(2);
+    printf("this will be overridden by lib2\n");
 }
 
 dpNoInline void OverriddenByDll()
 {
-    ::Sleep(3);
+    printf("this will be overridden by dll\n");
 }
 
 
@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
         OverriddenByLib1();
         OverriddenByLib2();
         OverriddenByDll();
-        ::Sleep(1000);
+        ::Sleep(3000);
         dpUpdate();
     }
     dpFinalize();

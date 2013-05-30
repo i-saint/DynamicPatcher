@@ -34,7 +34,10 @@ struct dpPatchData {
     dpSymbol symbol;
     void *orig;
     void *hook;
-    size_t size;
+    void *trampoline;
+    size_t hook_size;
+
+    dpPatchData() : orig(), hook(), trampoline(), hook_size() {}
 };
 inline bool operator< (const dpPatchData &a, const dpPatchData &b) { return strcmp(a.symbol.name, b.symbol.name)<0; }
 inline bool operator==(const dpPatchData &a, const dpPatchData &b) { return strcmp(a.symbol.name, b.symbol.name)==0; }
