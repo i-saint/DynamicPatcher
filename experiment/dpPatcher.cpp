@@ -58,10 +58,10 @@ static size_t CopyInstructions(void *dst, void *src, size_t minlen)
     return len;
 }
 
-void Patch(dpPatchData &pi)
+void dpPatcher::patch(dpPatchData &pi)
 {
     // 元コードの退避先
-    BYTE *preserved = (BYTE*)::dpAllocateBackward(32, pi.symbol.address);
+    BYTE *preserved = (BYTE*)m_palloc.allocate(pi.symbol.address);
     BYTE *f = (BYTE*)pi.symbol.address;
     DWORD old;
     ::VirtualProtect(f, 32, PAGE_EXECUTE_READWRITE, &old);
@@ -83,13 +83,13 @@ void Patch(dpPatchData &pi)
     pi.size = slice;
 }
 
-void Unpatch(dpPatchData &pi)
+void dpPatcher::unpatch(dpPatchData &pi)
 {
     DWORD old;
     ::VirtualProtect(pi.symbol.address, 32, PAGE_EXECUTE_READWRITE, &old);
     CopyInstructions(pi.symbol.address, pi.orig, pi.size);
     ::VirtualProtect(pi.symbol.address, 32, old, &old);
-    ::VirtualFree(pi.orig, 32, MEM_RELEASE);
+    m_palloc.deallocate(pi.orig);
 }
 
 
@@ -117,7 +117,7 @@ void* dpPatcher::patchByName(const char *name, void *hook)
     if(const dpSymbol *sym = dpGetLoader()->findHostSymbolByName(name)) {
         unpatchByAddress(sym->address);
         dpPatchData pi = {*sym, nullptr, hook, 0};
-        Patch(pi);
+        patch(pi);
         m_patches.push_back(pi);
         {
             char demangled[1024];
@@ -141,7 +141,7 @@ void* dpPatcher::patchByAddress(void *addr, void *hook)
     if(const dpSymbol *sym=dpGetLoader()->findHostSymbolByAddress(addr)) {
         unpatchByAddress(sym->address);
         dpPatchData pi = {*sym, nullptr, hook, 0};
-        Patch(pi);
+        patch(pi);
         m_patches.push_back(pi);
         {
             char demangled[1024];
@@ -160,7 +160,7 @@ size_t dpPatcher::unpatchByBinary(dpBinary *obj)
         if(dpPatchData *p = findPatchByName(sym.name)) {
             if(p->hook==sym.address) {
                 dpPrintUnpatch(sym);
-                Unpatch(*p);
+                unpatch(*p);
                 m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
                 ++n;
             }
@@ -173,7 +173,7 @@ bool dpPatcher::unpatchByName(const char *name)
 {
     if(dpPatchData *p = findPatchByName(name)) {
         dpPrintUnpatch(p->symbol);
-        Unpatch(*p);
+        unpatch(*p);
         m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
         return true;
     }
@@ -184,7 +184,7 @@ bool dpPatcher::unpatchByAddress(void *addr)
 {
     if(dpPatchData *p = findPatchByAddress(addr)) {
         dpPrintUnpatch(p->symbol);
-        Unpatch(*p);
+        unpatch(*p);
         m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
         return true;
     }
@@ -193,7 +193,7 @@ bool dpPatcher::unpatchByAddress(void *addr)
 
 void dpPatcher::unpatchAll()
 {
-    eachPatchData([&](dpPatchData &p){ Unpatch(p); });
+    eachPatchData([&](dpPatchData &p){ unpatch(p); });
     m_patches.clear();
 }
 

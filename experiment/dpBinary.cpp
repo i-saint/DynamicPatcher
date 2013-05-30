@@ -59,9 +59,7 @@ void dpSymbolTable::addSymbol(const dpSymbol &v)
 
 void dpSymbolTable::merge(const dpSymbolTable &v)
 {
-    std::for_each(v.m_symbols.begin(), v.m_symbols.end(), [&](const dpSymbol &sym){
-        m_symbols.push_back(sym);
-    });
+    dpEach(v.m_symbols, [&](const dpSymbol &sym){ m_symbols.push_back(sym); });
     sort();
 }
 
@@ -98,7 +96,7 @@ dpSymbol* dpSymbolTable::findSymbolByName(const char *name)
 
 dpSymbol* dpSymbolTable::findSymbolByAddress( void *addr )
 {
-    auto p = std::find_if(m_symbols.begin(), m_symbols.end(), [=](const dpSymbol &sym){ return sym.address==addr; });
+    auto p = dpFind(m_symbols, [=](const dpSymbol &sym){ return sym.address==addr; });
     return p==m_symbols.end() ? nullptr : &(*p);
 }
 
@@ -372,12 +370,12 @@ void dpObjFile::unload()
     dpCallOnUnloadHandler(this);
     dpGetPatcher()->unpatchByBinary(this);
     if(m_data!=NULL) {
-        ::VirtualFree(m_data, m_size, MEM_RELEASE);
+        dpDeallocate(m_data, m_size);
         m_data = NULL;
         m_size = 0;
     }
     if(m_aligned_data!=NULL) {
-        ::VirtualFree(m_aligned_data, m_aligned_datasize, MEM_RELEASE);
+        dpDeallocate(m_aligned_data, m_aligned_datasize);
         m_aligned_data = NULL;
         m_aligned_datasize = 0;
     }

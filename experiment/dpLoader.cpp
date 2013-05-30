@@ -141,8 +141,7 @@ dpBinary* dpLoader::loadBinary(const char *path)
 
 bool dpLoader::unloadBinary( const char *path )
 {
-    auto p = std::find_if(m_binaries.begin(), m_binaries.end(),
-        [=](dpBinary *b){ return _stricmp(b->getPath(), path)==0; }
+    auto p = dpFind(m_binaries, [=](dpBinary *b){ return _stricmp(b->getPath(), path)==0; }
     );
     if(p!=m_binaries.end()) {
         delete *p;
@@ -175,7 +174,7 @@ dpBinary* dpLoader::getBinary(size_t i)
 
 dpBinary* dpLoader::findBinary(const char *name)
 {
-    auto p = std::find_if(m_binaries.begin(), m_binaries.end(),
+    auto p = dpFind(m_binaries,
         [=](dpBinary *b){ return _stricmp(b->getPath(), name)==0; }
     );
     return p!=m_binaries.end() ? *p : nullptr;

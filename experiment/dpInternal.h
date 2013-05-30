@@ -36,7 +36,63 @@ inline bool operator< (const dpPatchData &a, const dpPatchData &b) { return strc
 inline bool operator==(const dpPatchData &a, const dpPatchData &b) { return strcmp(a.symbol.name, b.symbol.name)==0; }
 
 
+template<class Container, class F> inline void dpEach(Container &cont, const F &f);
+template<class Container, class F> inline auto dpFind(Container &cont, const F &f) -> decltype(cont.begin());
 
+void    dpPrint(const char* fmt, ...);
+void*   dpAllocateForward(size_t size, void *location);
+void*   dpAllocateBackward(size_t size, void *location);
+void*   dpAllocateModule(size_t size);
+void    dpDeallocate(void *location, size_t size);
+dpTime  dpGetFileModifiedTime(const char *path);
+bool    dpDemangle(const char *mangled, char *demangled, size_t buflen);
+
+char* dpGetPDBPathFromModule(void *pModule, bool fill_gap=false);
+bool dpCopyFile(const char *srcpath, const char *dstpath);
+
+template<class F> void dpGlob(const char *path, const F &f);
+template<class F> bool dpMapFile(const char *path, void *&o_data, size_t &o_size, const F &alloc);
+bool dpWriteFile(const char *path, const void *data, size_t size);
+bool dpDeleteFile(const char *path);
+bool dpFileExists(const char *path);
+size_t dpSeparateDirFile(const char *path, std::string *dir, std::string *file);
+size_t dpSeparateFileExt(const char *filename, std::string *file, std::string *ext);
+
+// アラインが必要な section データを再配置するための単純なアロケータ
+class dpSectionAllocator
+{
+public:
+    // data=NULL, size_t size=0xffffffff で初期化した場合、必要な容量を調べるのに使える
+    dpSectionAllocator(void *data=NULL, size_t size=0xffffffff);
+    // align: 2 の n 乗である必要がある
+    void* allocate(size_t size, size_t align);
+    size_t getUsed() const;
+private:
+    void *m_data;
+    size_t m_size;
+    size_t m_used;
+};
+
+class dpPatchAllocator
+{
+public:
+    static const size_t page_size = 1024*64;
+    static const size_t block_size = 32;
+
+    dpPatchAllocator();
+    ~dpPatchAllocator();
+    void* allocate(void *location);
+    bool deallocate(void *v);
+
+private:
+    class Page;
+    typedef std::vector<Page*> page_cont;
+    page_cont m_pages;
+
+    Page* createPage(void *location);
+    Page* findOwnerPage(void *location);
+    Page* findCandidatePage(void *location);
+};
 
 class dpSymbolTable
 {
@@ -139,7 +195,7 @@ public:
     dpObjFile*                   findObjFile(const char *name);
 
     template<class F>
-    void eachObjs(const F &f) { std::for_each(m_objs.begin(), m_objs.end(), f); }
+    void eachObjs(const F &f) { dpEach(m_objs, f); }
 
 private:
     typedef std::vector<dpObjFile*> obj_cont;
@@ -241,7 +297,11 @@ public:
 
 private:
     typedef std::vector<dpPatchData> patch_cont;
+    dpPatchAllocator m_palloc;
     patch_cont m_patches;
+
+    void patch(dpPatchData &pi);
+    void unpatch(dpPatchData &pi);
 };
 
 
@@ -302,54 +362,7 @@ dpAPI DynamicPatcher* dpGetInstance();
 #define dpGetLoader()   dpGetInstance()->getLoader()
 
 
-void    dpPrint(const char* fmt, ...);
-void*   dpAllocateForward(size_t size, void *location);
-void*   dpAllocateBackward(size_t size, void *location);
-void*   dpAllocateModule(size_t size);
-dpTime  dpGetFileModifiedTime(const char *path);
-bool    dpDemangle(const char *mangled, char *demangled, size_t buflen);
 
-char* dpGetPDBPathFromModule(void *pModule, bool fill_gap=false);
-bool dpCopyFile(const char *srcpath, const char *dstpath);
-
-template<class F> void dpGlob(const char *path, const F &f);
-template<class F> bool dpMapFile(const char *path, void *&o_data, size_t &o_size, const F &alloc);
-bool dpWriteFile(const char *path, const void *data, size_t size);
-bool dpDeleteFile(const char *path);
-bool dpFileExists(const char *path);
-
-size_t dpSeparateDirFile(const char *path, std::string *dir, std::string *file);
-size_t dpSeparateFileExt(const char *filename, std::string *file, std::string *ext);
-
-// アラインが必要な section データを再配置するための単純なアロケータ
-class dpSectionAllocator
-{
-public:
-    // data=NULL, size_t size=0xffffffff で初期化した場合、必要な容量を調べるのに使える
-    dpSectionAllocator(void *data=NULL, size_t size=0xffffffff);
-    // align: 2 の n 乗である必要がある
-    void* allocate(size_t size, size_t align);
-    size_t getUsed() const;
-private:
-    void *m_data;
-    size_t m_size;
-    size_t m_used;
-};
-
-class dpPatchAllocator
-{
-public:
-    dpPatchAllocator();
-    ~dpPatchAllocator();
-    void* allocate();
-    bool deallocate(void *v);
-
-private:
-    static const size_t page_size = 1024*64;
-    class Page;
-    typedef std::vector<Page*> page_cont;
-    page_cont m_pages;
-};
 
 
 template<class F>
@@ -387,3 +400,14 @@ inline bool dpMapFile(const char *path, void *&o_data, size_t &o_size, const F &
     return false;
 }
 
+template<class Container, class F>
+inline void dpEach(Container &cont, const F &f)
+{
+    std::for_each(cont.begin(), cont.end(), f);
+}
+
+template<class Container, class F>
+inline auto dpFind(Container &cont, const F &f) -> decltype(cont.begin())
+{
+    return std::find_if(cont.begin(), cont.end(), f);
+}

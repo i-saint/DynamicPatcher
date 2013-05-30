@@ -70,6 +70,11 @@ void* dpAllocateModule(size_t size)
     return dpAllocateBackward(size, GetModuleHandleA(nullptr));
 }
 
+void dpDeallocate(void *location, size_t size)
+{
+    ::VirtualFree(location, size, MEM_RELEASE);
+}
+
 dpTime dpGetFileModifiedTime(const char *path)
 {
     union RetT
@@ -210,37 +215,77 @@ class dpPatchAllocator::Page
 public:
     struct Block {
         union {
-            char data[32];
-            void *next;
+            char data[block_size];
+            Block *next;
         };
     };
-    Page(void *base, size_t size);
+    Page(void *base);
     ~Page();
     void* allocate();
     bool deallocate(void *v);
+    bool isInside(void *p) const;
+    bool isInside32Bit(void *p) const;
 
 private:
-    void *data;
-    size_t size;
+    void *m_data;
+    Block *m_freelist;
 };
 
-dpPatchAllocator::Page::Page(void *base, size_t size)
+dpPatchAllocator::Page::Page(void *base)
+    : m_data(nullptr), m_freelist(nullptr)
 {
+    m_data = dpAllocateBackward(page_size, base);
+    m_freelist = (Block*)m_data;
+    size_t n = page_size / block_size;
+    for(size_t i=0; i<n-1; ++i) {
+        m_freelist[i].next = m_freelist+i+1;
+    }
+    m_freelist[n-1].next = nullptr;
 }
 
 dpPatchAllocator::Page::~Page()
 {
+    dpDeallocate(m_data, page_size);
 }
 
 void* dpPatchAllocator::Page::allocate()
 {
-    return nullptr;
+    void *ret = nullptr;
+    if(m_freelist) {
+        ret = m_freelist;
+        m_freelist = m_freelist->next;
+    }
+    return ret;
 }
 
 bool dpPatchAllocator::Page::deallocate(void *v)
 {
-    return false;
+    bool ret = false;
+    if(isInside(v)) {
+        Block *b = (Block*)v;
+        b->next = m_freelist;
+        m_freelist = b;
+        ret = true;
+    }
+    return ret;
 }
+
+bool dpPatchAllocator::Page::isInside(void *p) const
+{
+    size_t loc = (size_t)p;
+    size_t base = (size_t)m_data;
+    return loc>=base && loc<base+page_size;
+}
+
+bool dpPatchAllocator::Page::isInside32Bit( void *p ) const
+{
+    size_t loc = (size_t)p;
+    size_t base = (size_t)m_data;
+    size_t dist = base<loc ? loc-base : base-loc;
+    return dist < 0x7fff0000;
+}
+
+
 
 dpPatchAllocator::dpPatchAllocator()
 {
@@ -248,14 +293,46 @@ dpPatchAllocator::dpPatchAllocator()
 
 dpPatchAllocator::~dpPatchAllocator()
 {
+    dpEach(m_pages, [](Page *p){ delete p; });
+    m_pages.clear();
 }
 
-void* dpPatchAllocator::allocate()
+void* dpPatchAllocator::allocate(void *location)
 {
-    return nullptr;
+    void *ret = nullptr;
+    if(Page *page=findCandidatePage(location)) {
+        ret = page->allocate();
+    }
+    if(!ret) {
+        Page *page = createPage(location);
+        ret = page->allocate();
+    }
+    return ret;
 }
 
 bool dpPatchAllocator::deallocate(void *v)
 {
+    if(Page *page=findOwnerPage(v)) {
+        return page->deallocate(v);
+    }
     return false;
+}
+
+dpPatchAllocator::Page* dpPatchAllocator::createPage(void *location)
+{
+    Page *p = new Page(location);
+    m_pages.push_back(p);
+    return p;
+}
+
+dpPatchAllocator::Page* dpPatchAllocator::findOwnerPage(void *location)
+{
+    auto p = dpFind(m_pages, [=](const Page *p){ return p->isInside(location); });
+    return p==m_pages.end() ? nullptr : *p;
+}
+
+dpPatchAllocator::Page* dpPatchAllocator::findCandidatePage(void *location)
+{
+    auto p = dpFind(m_pages, [=](const Page *p){ return p->isInside32Bit(location); });
+    return p==m_pages.end() ? nullptr : *p;
 }
