@@ -38,6 +38,7 @@
 #define dpDLLExport     __declspec(dllexport)
 #define dpDLLImport     __declspec(dllimport)
 #define dpCLinkage      extern "C"
+
 #define dpPatch         dpDLLExport
 #define dpNoInline      __declspec(noinline)
 #define dpScope(...)    __VA_ARGS__
@@ -45,11 +46,16 @@
 #define dpOnUnload(...) dpCLinkage static void dpOnUnloadHandler(){ __VA_ARGS__ } __declspec(selectany) void *_dpOnUnloadHandler=dpOnUnloadHandler;
 
 enum dpSymbolFlags {
-    dpE_Data    = 1, // rw data
-    dpE_RData   = 2, // readonly data
-    dpE_Export  = 4, // dllexport
+    dpE_Code    = 0x1,  // code
+    dpE_IData   = 0x2,  // initialized data
+    dpE_UData   = 0x4,  // uninitialized data
+    dpE_Read    = 0x8,  // readable
+    dpE_Write   = 0x10, // writable
+    dpE_Execute = 0x20, // executable
+    dpE_Shared  = 0x40, // shared
+    dpE_Export  = 0x80, // dllexport
 };
-#define dpIsFunction(flag) ((flag & (dpE_Data|dpE_RData))==0)
+#define dpIsFunction(flag) ((flag&dpE_Code)!=0)
 
 struct dpSymbol
 {
@@ -88,6 +94,7 @@ dpAPI void   dpUpdate();
 #else  // dpDisable
 
 #define dpPatch         
+#define dpNoInline      
 #define dpScope(...)    
 #define dpOnLoad(...)   
 #define dpOnUnload(...) 

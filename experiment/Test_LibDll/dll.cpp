@@ -7,5 +7,5 @@
 
 dpPatch void OverriddenByDll()
 {
-    printf("OverriddenByDll(): overridden!\n");
+    printf("OverriddenByDll(): overridden!!!\n");
 }

@@ -174,9 +174,3 @@ void dpBuilder::update()
         }
     }
 }
-
-
-dpCLinkage dpAPI dpBuilder* dpCreateBuilder()
-{
-    return new dpBuilder();
-}

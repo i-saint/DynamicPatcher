@@ -214,9 +214,3 @@ dpPatchData* dpPatcher::findPatchByAddress(void *addr)
     });
     return r;
 }
-
-
-dpCLinkage dpAPI dpPatcher* dpCreatedpPatcher()
-{
-    return new dpPatcher();
-}

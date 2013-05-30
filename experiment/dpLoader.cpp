@@ -55,8 +55,14 @@ dpLoader::dpLoader()
 dpLoader::~dpLoader()
 {
     m_hostsymbols.eachSymbols([&](const dpSymbol &sym){ delete[] sym.name; });
-    eachBinaries([](dpBinary *bin){ delete bin; });
-    m_binaries.clear();
+    while(!m_binaries.empty()) { unload(m_binaries.front()); }
+}
+
+void dpLoader::unload( dpBinary *bin )
+{
+    m_binaries.erase(std::find(m_binaries.begin(), m_binaries.end(), bin));
+    bin->callHandler(dpE_OnUnload);
+    delete bin;
 }
 
 bool dpLoader::link()
@@ -79,14 +85,14 @@ bool dpLoader::link()
     }
 
     // 新規ロードされているオブジェクトに OnLoad があれば呼ぶ & dpPatch つき symbol を patch する
-    for(size_t i=0; i<m_onload_queue.size(); ++i) {
-        m_onload_queue[i]->eachExports([&](const dpSymbol &sym){
+    dpEach(m_onload_queue, [&](dpBinary *b){
+        b->eachExports([&](const dpSymbol &sym){
             if(dpIsFunction(sym.flags)) {
                 dpGetPatcher()->patchByName(sym.name, sym.address);
             }
         });
-        dpCallOnLoadHandler(m_onload_queue[i]);
-    }
+        b->callHandler(dpE_OnLoad);
+    });
     m_onload_queue.clear();
 
     return ret;
@@ -126,10 +132,7 @@ dpBinary* dpLoader::loadBinary(const char *path)
     }
 
     if(ret->loadFile(path)) {
-        if(old) {
-            m_binaries.erase(std::find(m_binaries.begin(), m_binaries.end(), old));
-            delete old;
-        }
+        if(old) { unload(old); }
         m_binaries.push_back(ret);
     }
     else {
@@ -141,11 +144,8 @@ dpBinary* dpLoader::loadBinary(const char *path)
 
 bool dpLoader::unloadBinary( const char *path )
 {
-    auto p = dpFind(m_binaries, [=](dpBinary *b){ return _stricmp(b->getPath(), path)==0; }
-    );
-    if(p!=m_binaries.end()) {
-        delete *p;
-        m_binaries.erase(p);
+    if(dpBinary *bin=findBinary(path)) {
+        unload(bin);
         return true;
     }
     return false;
@@ -178,10 +178,4 @@ dpBinary* dpLoader::findBinary(const char *name)
         [=](dpBinary *b){ return _stricmp(b->getPath(), name)==0; }
     );
     return p!=m_binaries.end() ? *p : nullptr;
-}
-
-
-dpCLinkage dpAPI dpLoader* dpCreateLoader()
-{
-    return new dpLoader();
 }

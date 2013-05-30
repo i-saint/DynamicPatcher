@@ -25,6 +25,10 @@ enum dpFileType {
     dpE_Lib,
     dpE_Dll,
 };
+enum dpEventType {
+    dpE_OnLoad,
+    dpE_OnUnload,
+};
 
 struct dpPatchData {
     dpSymbol symbol;
@@ -129,8 +133,8 @@ public:
     virtual ~dpBinary() {}
     virtual bool loadFile(const char *path)=0;
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime)=0;
-    virtual void unload()=0;
     virtual bool link()=0;
+    virtual bool callHandler(dpEventType e)=0;
 
     virtual const dpSymbolTable& getSymbolTable() const=0;
     virtual const dpSymbolTable& getExportTable() const=0;
@@ -150,10 +154,11 @@ class dpObjFile : public dpBinary
 public:
     dpObjFile();
     ~dpObjFile();
+    void unload();
     virtual bool loadFile(const char *path);
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime);
-    virtual void unload();
     virtual bool link();
+    virtual bool callHandler(dpEventType e);
 
     virtual const dpSymbolTable& getSymbolTable() const;
     virtual const dpSymbolTable& getExportTable() const;
@@ -180,10 +185,11 @@ class dpLibFile : public dpBinary
 public:
     dpLibFile();
     ~dpLibFile();
+    void unload();
     virtual bool loadFile(const char *path);
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime);
-    virtual void unload();
     virtual bool link();
+    virtual bool callHandler(dpEventType e);
 
     virtual const dpSymbolTable& getSymbolTable() const;
     virtual const dpSymbolTable& getExportTable() const;
@@ -214,10 +220,11 @@ class dpDllFile : public dpBinary
 public:
     dpDllFile();
     ~dpDllFile();
+    void unload();
     virtual bool loadFile(const char *path);
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime);
-    virtual void unload();
     virtual bool link();
+    virtual bool callHandler(dpEventType e);
 
     virtual const dpSymbolTable& getSymbolTable() const;
     virtual const dpSymbolTable& getExportTable() const;
@@ -242,6 +249,7 @@ public:
     dpLoader();
     ~dpLoader();
 
+    void      unload(dpBinary *bin);
     dpBinary* loadBinary(const char *path); // path to .obj, .lib, .dll, .exe
     bool      unloadBinary(const char *path);
     bool      link();

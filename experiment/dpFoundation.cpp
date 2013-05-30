@@ -223,8 +223,8 @@ public:
     ~Page();
     void* allocate();
     bool deallocate(void *v);
-    bool isInside(void *p) const;
-    bool isInside32Bit(void *p) const;
+    bool isInsideMemory(void *p) const;
+    bool isInsideJumpRange(void *p) const;
 
 private:
     void *m_data;
@@ -261,7 +261,7 @@ void* dpPatchAllocator::Page::allocate()
 bool dpPatchAllocator::Page::deallocate(void *v)
 {
     bool ret = false;
-    if(isInside(v)) {
+    if(isInsideMemory(v)) {
         Block *b = (Block*)v;
         b->next = m_freelist;
         m_freelist = b;
@@ -270,14 +270,14 @@ bool dpPatchAllocator::Page::deallocate(void *v)
     return ret;
 }
 
-bool dpPatchAllocator::Page::isInside(void *p) const
+bool dpPatchAllocator::Page::isInsideMemory(void *p) const
 {
     size_t loc = (size_t)p;
     size_t base = (size_t)m_data;
     return loc>=base && loc<base+page_size;
 }
 
-bool dpPatchAllocator::Page::isInside32Bit( void *p ) const
+bool dpPatchAllocator::Page::isInsideJumpRange( void *p ) const
 {
     size_t loc = (size_t)p;
     size_t base = (size_t)m_data;
@@ -327,12 +327,12 @@ dpPatchAllocator::Page* dpPatchAllocator::createPage(void *location)
 
 dpPatchAllocator::Page* dpPatchAllocator::findOwnerPage(void *location)
 {
-    auto p = dpFind(m_pages, [=](const Page *p){ return p->isInside(location); });
+    auto p = dpFind(m_pages, [=](const Page *p){ return p->isInsideMemory(location); });
     return p==m_pages.end() ? nullptr : *p;
 }
 
 dpPatchAllocator::Page* dpPatchAllocator::findCandidatePage(void *location)
 {
-    auto p = dpFind(m_pages, [=](const Page *p){ return p->isInside32Bit(location); });
+    auto p = dpFind(m_pages, [=](const Page *p){ return p->isInsideJumpRange(location); });
     return p==m_pages.end() ? nullptr : *p;
 }

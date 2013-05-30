@@ -130,6 +130,23 @@ dpObjFile::~dpObjFile()
     unload();
 }
 
+void dpObjFile::unload()
+{
+    dpGetPatcher()->unpatchByBinary(this);
+    if(m_data!=NULL) {
+        dpDeallocate(m_data, m_size);
+        m_data = NULL;
+        m_size = 0;
+    }
+    if(m_aligned_data!=NULL) {
+        dpDeallocate(m_aligned_data, m_aligned_datasize);
+        m_aligned_data = NULL;
+        m_aligned_datasize = 0;
+    }
+    m_path.clear();
+    m_symbols.clear();
+}
+
 
 inline const char* GetSymbolName(PSTR StringTable, PIMAGE_SYMBOL Sym)
 {
@@ -185,8 +202,8 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
 
         for(size_t si=0; si<pImageHeader->NumberOfSections; ++si) {
             IMAGE_SECTION_HEADER &sect = pSectionHeader[si];
-            // 最初の section は linker directive が入っており、dllexport 付き symbol のリストがここに含まれる
-            if(si==0) {
+            // .drectve section には linker directive が入っており、dllexport 付き symbol のリストがここに含まれる
+            if(strncmp((char*)sect.Name, ".drectve", 8)==0) {
                 char *data = (char*)(ImageBase + sect.PointerToRawData);
                 data[sect.SizeOfRawData] = '\0';
                 std::regex reg("/EXPORT:([^ ,]+)");
@@ -239,8 +256,13 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
             if(sym->SectionNumber==IMAGE_SYM_UNDEFINED) { continue; }
             const char *name = GetSymbolName(StringTable, sym);
             DWORD flags = 0;
-            if     (strcmp((char*)sect.Name, ".data")==0 ) { flags=dpE_Data; }
-            else if(strcmp((char*)sect.Name, ".rdata")==0) { flags=dpE_RData; }
+            if((sect.Characteristics&IMAGE_SCN_CNT_CODE))               { flags|=dpE_Code; }
+            if((sect.Characteristics&IMAGE_SCN_CNT_INITIALIZED_DATA))   { flags|=dpE_IData; }
+            if((sect.Characteristics&IMAGE_SCN_CNT_UNINITIALIZED_DATA)) { flags|=dpE_UData; }
+            if((sect.Characteristics&IMAGE_SCN_MEM_READ))    { flags|=dpE_Read; }
+            if((sect.Characteristics&IMAGE_SCN_MEM_WRITE))   { flags|=dpE_Write; }
+            if((sect.Characteristics&IMAGE_SCN_MEM_EXECUTE)) { flags|=dpE_Execute; }
+            if((sect.Characteristics&IMAGE_SCN_MEM_SHARED))  { flags|=dpE_Shared; }
             m_symbols.addSymbol(dpSymbol(name, data, flags));
         }
         i += pSymbolTable[i].NumberOfAuxSymbols;
@@ -365,22 +387,13 @@ bool dpObjFile::link()
     return ret;
 }
 
-void dpObjFile::unload()
+bool dpObjFile::callHandler( dpEventType e )
 {
-    dpCallOnUnloadHandler(this);
-    dpGetPatcher()->unpatchByBinary(this);
-    if(m_data!=NULL) {
-        dpDeallocate(m_data, m_size);
-        m_data = NULL;
-        m_size = 0;
+    switch(e) {
+    case dpE_OnLoad:   dpCallOnLoadHandler(this);   return true;
+    case dpE_OnUnload: dpCallOnUnloadHandler(this); return true;
     }
-    if(m_aligned_data!=NULL) {
-        dpDeallocate(m_aligned_data, m_aligned_datasize);
-        m_aligned_data = NULL;
-        m_aligned_datasize = 0;
-    }
-    m_path.clear();
-    m_symbols.clear();
+    return false;
 }
 
 const dpSymbolTable& dpObjFile::getSymbolTable() const      { return m_symbols; }
@@ -400,6 +413,13 @@ dpLibFile::dpLibFile()
 dpLibFile::~dpLibFile()
 {
     unload();
+}
+
+void dpLibFile::unload()
+{
+    eachObjs([](dpObjFile *o){ delete o; });
+    m_objs.clear();
+    m_symbols.clear();
 }
 
 bool dpLibFile::loadFile(const char *path)
@@ -508,18 +528,16 @@ GO_NEXT:
     return true;
 }
 
-void dpLibFile::unload()
-{
-    eachObjs([](dpObjFile *o){ delete o; });
-    m_objs.clear();
-    m_symbols.clear();
-}
-
 bool dpLibFile::link()
 {
     bool ret = true;
     eachObjs([&](dpObjFile *o){ if(!o->link()){ ret=false; } });
     return ret;
+}
+
+bool dpLibFile::callHandler( dpEventType e )
+{
+    return false;
 }
 
 const dpSymbolTable& dpLibFile::getSymbolTable() const      { return m_symbols; }
@@ -553,9 +571,20 @@ dpDllFile::~dpDllFile()
     unload();
 }
 
+void dpDllFile::unload()
+{
+    if(m_module && m_needs_freelibrary) {
+        ::FreeLibrary(m_module);
+        dpDeleteFile(m_actual_file.c_str()); m_actual_file.clear();
+        dpDeleteFile(m_pdb_path.c_str()); m_pdb_path.clear();
+    }
+    m_needs_freelibrary = false;
+    m_symbols.clear();
+}
+
 // F: functor(const char *name, void *sym)
 template<class F>
-inline void EnumerateDLLExports(HMODULE module, const F &f)
+inline void dpEnumerateDLLExports(HMODULE module, const F &f)
 {
     if(module==NULL) { return; }
 
@@ -634,28 +663,26 @@ bool dpDllFile::loadMemory(const char *path, void *data, size_t /*datasize*/, dp
     m_path = path;
     m_mtime = mtime;
     m_module = (HMODULE)data;
-    EnumerateDLLExports(m_module, [&](const char *name, void *sym){
-        m_symbols.addSymbol(dpSymbol(name, sym, dpE_Export));
+    dpEnumerateDLLExports(m_module, [&](const char *name, void *sym){
+        m_symbols.addSymbol(dpSymbol(name, sym, dpE_Code|dpE_Read|dpE_Execute|dpE_Export));
     });
     m_symbols.sort();
     dpGetLoader()->addOnLoadList(this);
     return true;
 }
 
-void dpDllFile::unload()
-{
-    if(m_module && m_needs_freelibrary) {
-        ::FreeLibrary(m_module);
-        dpDeleteFile(m_actual_file.c_str()); m_actual_file.clear();
-        dpDeleteFile(m_pdb_path.c_str()); m_pdb_path.clear();
-    }
-    m_needs_freelibrary = false;
-    m_symbols.clear();
-}
-
 bool dpDllFile::link()
 {
     return m_module!=nullptr;
+}
+
+bool dpDllFile::callHandler( dpEventType e )
+{
+    switch(e) {
+    case dpE_OnLoad:   dpCallOnLoadHandler(this);   return true;
+    case dpE_OnUnload: dpCallOnUnloadHandler(this); return true;
+    }
+    return false;
 }
 
 const dpSymbolTable& dpDllFile::getSymbolTable() const      { return m_symbols; }

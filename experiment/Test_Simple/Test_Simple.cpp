@@ -92,3 +92,7 @@ dpOnLoad(
     dpPatchByAddress(&puts, &puts_hook);
     //dpPatchByFile(dpObjDir"/Test_Simple.obj", ".*Test.*");
 )
+
+dpOnUnload(
+    printf("unloaded.\n");
+)
