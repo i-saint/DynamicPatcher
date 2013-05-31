@@ -6,8 +6,6 @@
 #define DynamicPatcher_h
 
 #ifndef dpDisable
-#include <cstdint>
-#include <cstring>
 #include <functional>
 
 #ifdef _WIN64
@@ -61,20 +59,28 @@ struct dpSymbol
 {
     const char *name;
     void *address;
-    uint32_t flags;
+    int flags;
 
-    dpSymbol(const char *n=NULL, void *a=NULL, uint32_t f=0)
+    dpSymbol(const char *n=NULL, void *a=NULL, int f=0)
         : name(n), address(a), flags(f)
     {}
 };
-inline bool operator< (const dpSymbol &a, const dpSymbol &b) { return strcmp(a.name, b.name)<0; }
-inline bool operator==(const dpSymbol &a, const dpSymbol &b) { return strcmp(a.name, b.name)==0; }
 
+class dpContext;
 
 dpAPI bool   dpInitialize();
 dpAPI bool   dpFinalize();
 
+dpAPI dpContext* dpGetDefaultContext();
+dpAPI dpContext* dpCreateContext();
+dpAPI void       dpDeleteContext(dpContext *ctx);
+dpAPI void       dpSetCurrentContext(dpContext *ctx); // current context is thread local
+dpAPI dpContext* dpGetCurrentContext(); // default is dpGetDefaultContext()
+
 dpAPI size_t dpLoad(const char *path); // path to .obj .lib .dll .exe. accept wildcard (x64/Debug/*.obj)
+dpAPI size_t dpLoadObj(const char *path); // load as .obj
+dpAPI size_t dpLoadLib(const char *path); // load as .lib
+dpAPI size_t dpLoadDll(const char *path); // load as .dll
 dpAPI bool   dpLink();
 
 dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex);
@@ -83,7 +89,7 @@ dpAPI size_t dpPatchByFile(const char *filename, const std::function<bool (const
 #endif // _MSC_VER>=1600
 dpAPI bool   dpPatchByName(const char *symbol_name);
 dpAPI bool   dpPatchByAddress(void *target, void *hook);
-dpAPI void*  dpGetUnpatchedFunction(void *target);
+dpAPI void*  dpGetUnpatched(void *target);
 
 dpAPI void   dpAddLoadPath(const char *path); // accept wildcard (x64/Debug/*.obj)
 dpAPI void   dpAddSourcePath(const char *path);
@@ -101,12 +107,22 @@ dpAPI void   dpUpdate();
 
 #define dpInitialize(...) 
 #define dpFinalize(...) 
+
+#define dpGetDefaultContext(...) 
+#define dpCreateContext(...) 
+#define dpDeleteContext(...) 
+#define dpSetCurrentContext(...) 
+#define dpGetCurrentContext(...) 
+
 #define dpLoad(...) 
+#define dpLoadObj(...) 
+#define dpLoadLib(...) 
+#define dpLoadDll(...) 
 #define dpLink(...) 
 #define dpPatchByFile(...) 
 #define dpPatchByName(...) 
 #define dpPatchByAddress(...) 
-#define dpGetUnpatchedFunction(...) 
+#define dpGetUnpatched(...) 
 
 #define dpAddLoadPath(...) 
 #define dpAddSourcePath(...) 

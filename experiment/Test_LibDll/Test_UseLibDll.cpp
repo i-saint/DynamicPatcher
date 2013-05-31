@@ -20,6 +20,10 @@
 #   define dpConfiguration "Release"
 #endif
 
+dpScope(
+    dpContext *g_dp_context;
+)
+
 dpNoInline void OverriddenByLib1()
 {
     printf("this will be overridden by lib1\n");
@@ -39,6 +43,9 @@ dpNoInline void OverriddenByDll()
 int main(int argc, char *argv[])
 {
     dpInitialize();
+    dpScope(g_dp_context=dpCreateContext());
+    dpSetCurrentContext(g_dp_context);
+
     dpAddLoadPath("Test_Dll.dll");
     dpAddLoadPath("Test_Lib.lib");
     dpAddSourcePath("Test_LibDll");
@@ -52,5 +59,6 @@ int main(int argc, char *argv[])
         ::Sleep(3000);
         dpUpdate();
     }
+    dpScope(dpDeleteContext(g_dp_context));
     dpFinalize();
 }

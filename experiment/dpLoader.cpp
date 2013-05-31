@@ -48,7 +48,8 @@ const dpSymbol* dpLoader::findHostSymbolByAddress(void *addr)
 }
 
 
-dpLoader::dpLoader()
+dpLoader::dpLoader(dpContext *ctx)
+    : m_context(ctx)
 {
 }
 
@@ -117,13 +118,13 @@ dpBinary* dpLoader::loadBinary(const char *path)
     dpBinary *ret = nullptr;
     if(!ret) {
         if(_stricmp(&path[len-4], ".obj")==0) {
-            ret = new dpObjFile();
+            ret = new dpObjFile(m_context);
         }
         else if(_stricmp(&path[len-4], ".lib")==0) {
-            ret = new dpLibFile();
+            ret = new dpLibFile(m_context);
         }
         else if(_stricmp(&path[len-4], ".dll")==0 || _stricmp(&path[len-4], ".exe")==0) {
-            ret = new dpDllFile();
+            ret = new dpDllFile(m_context);
         }
         else {
             dpPrint("dp error: unsupported file %s\n", path);

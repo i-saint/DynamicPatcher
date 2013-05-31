@@ -34,7 +34,7 @@ dpScope(
 int puts_hook(const char *s)
 {
     typedef int (*puts_t)(const char *s);
-    puts_t orig_puts = (puts_t)dpGetUnpatchedFunction(&puts);
+    puts_t orig_puts = (puts_t)dpGetUnpatched(&puts);
     orig_puts("puts_hook()");
     return orig_puts(s);
 }

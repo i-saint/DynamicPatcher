@@ -337,3 +337,68 @@ dpPatchAllocator::Page* dpPatchAllocator::findCandidatePage(void *location)
     auto p = dpFind(m_pages, [=](const Page *p){ return p->isInsideJumpRange(location); });
     return p==m_pages.end() ? nullptr : *p;
 }
+
+
+
+void dpSymbolTable::addSymbol(const dpSymbol &v)
+{
+    m_symbols.push_back(v);
+}
+
+void dpSymbolTable::merge(const dpSymbolTable &v)
+{
+    dpEach(v.m_symbols, [&](const dpSymbol &sym){ m_symbols.push_back(sym); });
+    sort();
+}
+
+void dpSymbolTable::sort()
+{
+    std::sort(m_symbols.begin(), m_symbols.end());
+    m_symbols.erase(std::unique(m_symbols.begin(), m_symbols.end()), m_symbols.end());
+}
+
+void dpSymbolTable::clear()
+{
+    m_symbols.clear();
+}
+
+size_t dpSymbolTable::getNumSymbols() const
+{
+    return m_symbols.size();
+}
+
+dpSymbol* dpSymbolTable::getSymbol(size_t i)
+{
+    return &m_symbols[i];
+}
+
+dpSymbol* dpSymbolTable::findSymbolByName(const char *name)
+{
+    dpSymbol tmp(name, nullptr, 0);
+    auto p = std::lower_bound(m_symbols.begin(), m_symbols.end(), tmp);
+    if(p!=m_symbols.end() && *p==tmp) {
+        return &(*p);
+    }
+    return nullptr;
+}
+
+dpSymbol* dpSymbolTable::findSymbolByAddress( void *addr )
+{
+    auto p = dpFind(m_symbols, [=](const dpSymbol &sym){ return sym.address==addr; });
+    return p==m_symbols.end() ? nullptr : &(*p);
+}
+
+const dpSymbol* dpSymbolTable::getSymbol(size_t i) const
+{
+    return const_cast<dpSymbolTable*>(this)->getSymbol(i);
+}
+
+const dpSymbol* dpSymbolTable::findSymbolByName(const char *name) const
+{
+    return const_cast<dpSymbolTable*>(this)->findSymbolByName(name);
+}
+
+const dpSymbol* dpSymbolTable::findSymbolByAddress( void *sym ) const
+{
+    return const_cast<dpSymbolTable*>(this)->findSymbolByAddress(sym);
+}

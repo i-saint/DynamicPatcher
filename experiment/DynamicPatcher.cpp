@@ -7,47 +7,152 @@
 #include <regex>
 #pragma comment(lib, "dbghelp.lib")
 
-static DynamicPatcher *g_instance;
+static dpContext *g_dpDefaultContext = nullptr;
+static __declspec(thread) dpContext *g_dpCurrentContext = nullptr;
 
-DynamicPatcher::DynamicPatcher()
+dpContext::dpContext()
 {
-    ::SymInitialize(::GetCurrentProcess(), NULL, TRUE);
-    ::SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
-    g_instance = this;
-    m_builder = new dpBuilder();
-    m_patcher = new dpPatcher();
-    m_loader  = new dpLoader();
+    m_builder = new dpBuilder(this);
+    m_patcher = new dpPatcher(this);
+    m_loader  = new dpLoader(this);
 }
 
-DynamicPatcher::~DynamicPatcher()
+dpContext::~dpContext()
 {
     // バイナリ unload 時に適切に unpatch するには patcher より先に loader を破棄する必要がある
     delete m_loader;  m_loader=nullptr;
     delete m_patcher; m_patcher=nullptr;
     delete m_builder; m_builder=nullptr;
-    g_instance = nullptr;
 }
 
-dpBuilder* DynamicPatcher::getBuilder() { return m_builder; }
-dpPatcher* DynamicPatcher::getPatcher() { return m_patcher; }
-dpLoader*  DynamicPatcher::getLoader()  { return m_loader; }
+dpBuilder* dpContext::getBuilder() { return m_builder; }
+dpPatcher* dpContext::getPatcher() { return m_patcher; }
+dpLoader*  dpContext::getLoader()  { return m_loader; }
 
-void DynamicPatcher::update()
+size_t dpContext::load(const char *path)
+{
+    size_t ret = 0;
+    dpGlob(path, [&](const std::string &p){
+        if(m_loader->loadBinary(p.c_str())) { ++ret; }
+    });
+    return ret;
+}
+
+bool dpContext::link()
+{
+    return m_loader->link();
+}
+
+size_t dpContext::patchByFile(const char *filename, const char *filter_regex)
+{
+    if(dpBinary *bin=m_loader->findBinary(filename)) {
+        std::regex reg(filter_regex);
+        m_patcher->patchByBinary(bin,
+            [&](const dpSymbol &sym){
+                return std::regex_search(sym.name, reg);
+        });
+        return true;
+    }
+    return false;
+}
+
+size_t dpContext::patchByFile(const char *filename, const std::function<bool (const dpSymbol&)> &condition)
+{
+    if(dpBinary *bin=m_loader->findBinary(filename)) {
+        m_patcher->patchByBinary(bin, condition);
+        return true;
+    }
+    return false;
+}
+
+bool dpContext::patchByName(const char *name)
+{
+    if(const dpSymbol *sym=m_loader->findHostSymbolByName(name)) {
+        if(const dpSymbol *hook=m_loader->findLoadedSymbolByName(sym->name)) {
+            m_patcher->patchByAddress(sym->address, hook->address);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool dpContext::patchByAddress(void *target, void *hook)
+{
+    if(m_patcher->patchByAddress(target, hook)) {
+        return true;
+    }
+    return false;
+}
+
+void* dpContext::getUnpatched(void *target)
+{
+    if(dpPatchData *pd = m_patcher->findPatchByAddress(target)) {
+        return pd->orig;
+    }
+    return nullptr;
+}
+
+void dpContext::addLoadPath(const char *path)
+{
+    m_builder->addLoadPath(path);
+}
+
+void dpContext::addSourcePath(const char *path)
+{
+    m_builder->addSourcePath(path);
+}
+
+bool dpContext::startAutoBuild(const char *msbuild_option, bool console)
+{
+    return m_builder->startAutoCompile(msbuild_option, console);
+}
+
+bool dpContext::stopAutoBuild()
+{
+    return m_builder->stopAutoCompile();
+}
+
+void dpContext::update()
 {
     m_builder->update();
     m_loader->link();
 }
 
-dpAPI DynamicPatcher* dpGetInstance()
+
+
+dpAPI dpContext* dpCreateContext()
 {
-    return g_instance;
+    return new dpContext();
+}
+
+dpAPI void dpDeleteContext(dpContext *ctx)
+{
+    delete ctx;
+};
+
+dpAPI dpContext* dpGetDefaultContext()
+{
+    return g_dpDefaultContext;
+}
+
+dpAPI void dpSetCurrentContext(dpContext *ctx)
+{
+    g_dpCurrentContext = ctx;
+}
+
+dpAPI dpContext* dpGetCurrentContext()
+{
+    if(!g_dpCurrentContext) { g_dpCurrentContext=g_dpDefaultContext; }
+    return g_dpCurrentContext;
 }
 
 
 dpAPI bool dpInitialize()
 {
-    if(!g_instance) {
-        new DynamicPatcher();
+    ::SymInitialize(::GetCurrentProcess(), NULL, TRUE);
+    ::SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
+    if(!g_dpDefaultContext) {
+        g_dpDefaultContext = new dpContext();
         return true;
     }
     return false;
@@ -55,8 +160,9 @@ dpAPI bool dpInitialize()
 
 dpAPI bool dpFinalize()
 {
-    if(g_instance) {
-        delete g_instance;
+    if(g_dpDefaultContext) {
+        delete g_dpDefaultContext;
+        g_dpDefaultContext = nullptr;
         return true;
     }
     return false;
@@ -65,89 +171,61 @@ dpAPI bool dpFinalize()
 
 dpAPI size_t dpLoad(const char *path)
 {
-    size_t ret = 0;
-    dpGlob(path, [&](const std::string &p){
-        if(dpGetLoader()->loadBinary(p.c_str())) { ++ret; }
-    });
-    return ret;
+    return dpGetCurrentContext()->load(path);
 }
 
 dpAPI bool dpLink()
 {
-    return dpGetLoader()->link();
+    return dpGetCurrentContext()->link();
 }
 
 dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex)
 {
-    if(dpBinary *bin=dpGetLoader()->findBinary(filename)) {
-        std::regex reg(filter_regex);
-        dpGetPatcher()->patchByBinary(bin,
-            [&](const dpSymbol &sym){
-                return std::regex_search(sym.name, reg);
-            });
-        return true;
-    }
-    return false;
+    return dpGetCurrentContext()->patchByFile(filename, filter_regex);
 }
 
 dpAPI size_t dpPatchByFile(const char *filename, const std::function<bool (const dpSymbol&)> &condition)
 {
-    if(dpBinary *bin=dpGetLoader()->findBinary(filename)) {
-        dpGetPatcher()->patchByBinary(bin, condition);
-        return true;
-    }
-    return false;
+    return dpGetCurrentContext()->patchByFile(filename, condition);
 }
 
 dpAPI bool dpPatchByName(const char *name)
 {
-    if(const dpSymbol *sym=dpGetLoader()->findHostSymbolByName(name)) {
-        if(const dpSymbol *hook=dpGetLoader()->findLoadedSymbolByName(sym->name)) {
-            dpGetPatcher()->patchByAddress(sym->address, hook->address);
-            return true;
-        }
-    }
-    return false;
+    return dpGetCurrentContext()->patchByName(name);
 }
 
 dpAPI bool dpPatchByAddress(void *target, void *hook)
 {
-    if(dpGetPatcher()->patchByAddress(target, hook)) {
-        return true;
-    }
-    return false;
+    return dpGetCurrentContext()->patchByAddress(target, hook);
 }
 
-dpAPI void* dpGetUnpatchedFunction( void *target )
+dpAPI void* dpGetUnpatched(void *target)
 {
-    if(dpPatchData *pd = dpGetPatcher()->findPatchByAddress(target)) {
-        return pd->orig;
-    }
-    return nullptr;
+    return dpGetCurrentContext()->getUnpatched(target);
 }
 
 
 dpAPI void dpAddLoadPath(const char *path)
 {
-    dpGetBuilder()->addLoadPath(path);
+    dpGetCurrentContext()->addLoadPath(path);
 }
 
 dpAPI void dpAddSourcePath(const char *path)
 {
-    dpGetBuilder()->addSourcePath(path);
+    dpGetCurrentContext()->addSourcePath(path);
 }
 
 dpAPI bool dpStartAutoBuild(const char *option, bool console)
 {
-    return dpGetBuilder()->startAutoCompile(option, console);
+    return dpGetCurrentContext()->startAutoBuild(option, console);
 }
 
 dpAPI bool dpStopAutoBuild()
 {
-    return dpGetBuilder()->stopAutoCompile();
+    return dpGetCurrentContext()->stopAutoBuild();
 }
 
 dpAPI void dpUpdate()
 {
-    dpGetInstance()->update();
+    dpGetCurrentContext()->update();
 }

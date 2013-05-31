@@ -131,7 +131,8 @@ void dpPatcher::unpatch(dpPatchData &pi)
 }
 
 
-dpPatcher::dpPatcher()
+dpPatcher::dpPatcher(dpContext *ctx)
+    : m_context(ctx)
 {
 }
 

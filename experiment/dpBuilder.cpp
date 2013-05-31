@@ -5,8 +5,9 @@
 #include "DynamicPatcher.h"
 #include "dpInternal.h"
 
-dpBuilder::dpBuilder()
-    : m_msbuild_option()
+dpBuilder::dpBuilder(dpContext *ctx)
+    : m_context(ctx)
+    , m_msbuild_option()
     , m_create_console(false)
     , m_build_done(false)
     , m_flag_exit(false)

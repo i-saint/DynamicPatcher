@@ -12,113 +12,35 @@ const char g_symname_onunload[] = dpSymPrefix "dpOnUnloadHandler";
 
 
 
-void* dpResolveExternalSymbol( dpBinary *bin, const char *name )
-{
-    void *sym = nullptr;
-    {
-        if(const dpSymbol *s=bin->getSymbolTable().findSymbolByName(name)) {
-            sym = s->address;
-        }
-    }
-    if(!sym) {
-        if(const dpSymbol *s=dpGetLoader()->findLoadedSymbolByName(name)) {
-            sym = s->address;
-        }
-    }
-    if(!sym) {
-        if(const dpSymbol *s=dpGetLoader()->findHostSymbolByName(name)) {
-            sym = s->address;
-        }
-    }
-    return sym;
-}
-
-typedef void (*dpHandler)();
-void dpCallOnLoadHandler(dpBinary *v)
+typedef void (*dpEventHandler)();
+static inline void dpCallOnLoadHandler(dpBinary *v)
 {
     if(const dpSymbol *sym = v->getSymbolTable().findSymbolByName(g_symname_onload)) {
-        ((dpHandler)sym->address)();
+        ((dpEventHandler)sym->address)();
     }
 }
-
-void dpCallOnUnloadHandler(dpBinary *v)
+static inline void dpCallOnUnloadHandler(dpBinary *v)
 {
     if(const dpSymbol *sym = v->getSymbolTable().findSymbolByName(g_symname_onunload)) {
-        ((dpHandler)sym->address)();
+        ((dpEventHandler)sym->address)();
     }
 }
 
 
 
 
-
-void dpSymbolTable::addSymbol(const dpSymbol &v)
+dpBinary::dpBinary(dpContext *ctx) : m_context(ctx)
 {
-    m_symbols.push_back(v);
 }
 
-void dpSymbolTable::merge(const dpSymbolTable &v)
+dpBinary::~dpBinary()
 {
-    dpEach(v.m_symbols, [&](const dpSymbol &sym){ m_symbols.push_back(sym); });
-    sort();
-}
-
-void dpSymbolTable::sort()
-{
-    std::sort(m_symbols.begin(), m_symbols.end());
-    m_symbols.erase(std::unique(m_symbols.begin(), m_symbols.end()), m_symbols.end());
-}
-
-void dpSymbolTable::clear()
-{
-    m_symbols.clear();
-}
-
-size_t dpSymbolTable::getNumSymbols() const
-{
-    return m_symbols.size();
-}
-
-dpSymbol* dpSymbolTable::getSymbol(size_t i)
-{
-    return &m_symbols[i];
-}
-
-dpSymbol* dpSymbolTable::findSymbolByName(const char *name)
-{
-    dpSymbol tmp(name, nullptr, 0);
-    auto p = std::lower_bound(m_symbols.begin(), m_symbols.end(), tmp);
-    if(p!=m_symbols.end() && *p==tmp) {
-        return &(*p);
-    }
-    return nullptr;
-}
-
-dpSymbol* dpSymbolTable::findSymbolByAddress( void *addr )
-{
-    auto p = dpFind(m_symbols, [=](const dpSymbol &sym){ return sym.address==addr; });
-    return p==m_symbols.end() ? nullptr : &(*p);
-}
-
-const dpSymbol* dpSymbolTable::getSymbol(size_t i) const
-{
-    return const_cast<dpSymbolTable*>(this)->getSymbol(i);
-}
-
-const dpSymbol* dpSymbolTable::findSymbolByName(const char *name) const
-{
-    return const_cast<dpSymbolTable*>(this)->findSymbolByName(name);
-}
-
-const dpSymbol* dpSymbolTable::findSymbolByAddress( void *sym ) const
-{
-    return const_cast<dpSymbolTable*>(this)->findSymbolByAddress(sym);
 }
 
 
-
-dpObjFile::dpObjFile()
-    : m_data(nullptr), m_size(0)
+dpObjFile::dpObjFile(dpContext *ctx)
+    : dpBinary(ctx)
+    , m_data(nullptr), m_size(0)
     , m_aligned_data(nullptr), m_aligned_datasize(0)
     , m_path(), m_mtime(0)
     , m_reloc_bases(), m_symbols()
@@ -312,7 +234,7 @@ bool dpObjFile::link()
             PIMAGE_RELOCATION pReloc = pRelocation + ri;
             PIMAGE_SYMBOL rsym = pSymbolTable + pReloc->SymbolTableIndex;
             const char *rname = GetSymbolName(StringTable, rsym);
-            size_t rdata = (size_t)dpResolveExternalSymbol(this, rname);
+            size_t rdata = (size_t)resolveSymbol(rname);
             if(rdata==NULL) {
                 char buf[1024];
                 _snprintf(buf, _countof(buf), "dp fatal: symbol %s referenced by %s could not be resolved.\n", rname, m_path.c_str());
@@ -403,10 +325,32 @@ dpTime               dpObjFile::getLastModifiedTime() const { return m_mtime; }
 dpFileType           dpObjFile::getFileType() const         { return dpE_Obj; }
 void*                dpObjFile::getBaseAddress() const      { return m_data; }
 
+void* dpObjFile::resolveSymbol( const char *name )
+{
+    void *sym = nullptr;
+    {
+        if(const dpSymbol *s=getSymbolTable().findSymbolByName(name)) {
+            sym = s->address;
+        }
+    }
+    if(!sym) {
+        if(const dpSymbol *s=dpGetLoader()->findLoadedSymbolByName(name)) {
+            sym = s->address;
+        }
+    }
+    if(!sym) {
+        if(const dpSymbol *s=dpGetLoader()->findHostSymbolByName(name)) {
+            sym = s->address;
+        }
+    }
+    return sym;
+}
 
 
-dpLibFile::dpLibFile()
-    : m_mtime(0)
+
+dpLibFile::dpLibFile(dpContext *ctx)
+    : dpBinary(ctx)
+    , m_mtime(0)
 {
 }
 
@@ -496,7 +440,7 @@ bool dpLibFile::loadMemory(const char *path, void *lib_data, size_t lib_size, dp
             else {
                 data = dpAllocateModule(size);
                 memcpy(data, base, size);
-                dpObjFile *obj = new dpObjFile();
+                dpObjFile *obj = new dpObjFile(m_context);
                 if(obj->loadMemory(name.c_str(), data, size, mtime)) {
                     if(old) {
                         m_objs.erase(std::find(m_objs.begin(), m_objs.end(), old));
@@ -560,8 +504,9 @@ dpObjFile* dpLibFile::findObjFile( const char *name )
 
 
 
-dpDllFile::dpDllFile()
-    : m_module(nullptr), m_needs_freelibrary(false)
+dpDllFile::dpDllFile(dpContext *ctx)
+    : dpBinary(ctx)
+    , m_module(nullptr), m_needs_freelibrary(false)
     , m_mtime(0)
 {
 }

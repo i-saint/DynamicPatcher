@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <dbghelp.h>
 #include <process.h>
+#include <cstdint>
 #include <vector>
 #include <string>
 #include <map>
@@ -18,7 +19,7 @@ class dpDllFile;
 class dpLoader;
 class dpPatcher;
 class dpBuilder;
-class DynamicPatcher;
+class dpContext;
 
 enum dpFileType {
     dpE_Obj,
@@ -42,6 +43,8 @@ struct dpPatchData {
 inline bool operator< (const dpPatchData &a, const dpPatchData &b) { return strcmp(a.symbol.name, b.symbol.name)<0; }
 inline bool operator==(const dpPatchData &a, const dpPatchData &b) { return strcmp(a.symbol.name, b.symbol.name)==0; }
 
+inline bool operator< (const dpSymbol &a, const dpSymbol &b) { return strcmp(a.name, b.name)<0; }
+inline bool operator==(const dpSymbol &a, const dpSymbol &b) { return strcmp(a.name, b.name)==0; }
 
 template<class Container, class F> inline void dpEach(Container &cont, const F &f);
 template<class Container, class F> inline auto dpFind(Container &cont, const F &f) -> decltype(cont.begin());
@@ -129,11 +132,17 @@ private:
     symbol_cont m_symbols;
 };
 
+#define dpGetBuilder()  m_context->getBuilder()
+#define dpGetPatcher()  m_context->getPatcher()
+#define dpGetLoader()   m_context->getLoader()
+
+
 
 class dpBinary
 {
 public:
-    virtual ~dpBinary() {}
+    dpBinary(dpContext *ctx);
+    virtual ~dpBinary();
     virtual bool loadFile(const char *path)=0;
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime)=0;
     virtual bool link()=0;
@@ -150,12 +159,15 @@ public:
 
     // F: [](const dpSymbol &sym)
     template<class F> void eachExports(const F &f) const { getExportTable().eachSymbols(f); }
+
+protected:
+    dpContext *m_context;
 };
 
 class dpObjFile : public dpBinary
 {
 public:
-    dpObjFile();
+    dpObjFile(dpContext *ctx);
     ~dpObjFile();
     void unload();
     virtual bool loadFile(const char *path);
@@ -181,12 +193,14 @@ private:
     RelocBaseMap m_reloc_bases;
     dpSymbolTable m_symbols;
     dpSymbolTable m_exports;
+
+    void* resolveSymbol(const char *name);
 };
 
 class dpLibFile : public dpBinary
 {
 public:
-    dpLibFile();
+    dpLibFile(dpContext *ctx);
     ~dpLibFile();
     void unload();
     virtual bool loadFile(const char *path);
@@ -221,7 +235,7 @@ private:
 class dpDllFile : public dpBinary
 {
 public:
-    dpDllFile();
+    dpDllFile(dpContext *ctx);
     ~dpDllFile();
     void unload();
     virtual bool loadFile(const char *path);
@@ -249,7 +263,7 @@ private:
 class dpLoader
 {
 public:
-    dpLoader();
+    dpLoader(dpContext *ctx);
     ~dpLoader();
 
     void      unload(dpBinary *bin);
@@ -277,6 +291,8 @@ public:
 
 private:
     typedef std::vector<dpBinary*> binary_cont;
+
+    dpContext *m_context;
     binary_cont m_binaries;
     binary_cont m_onload_queue;
     dpSymbolTable m_hostsymbols;
@@ -286,7 +302,7 @@ private:
 class dpPatcher
 {
 public:
-    dpPatcher();
+    dpPatcher(dpContext *ctx);
     ~dpPatcher();
     void*  patchByBinary(dpBinary *obj, const std::function<bool (const dpSymbol&)> &condition);
     void*  patchByName(const char *name, void *hook);
@@ -308,6 +324,8 @@ public:
 
 private:
     typedef std::vector<dpPatchData> patch_cont;
+
+    dpContext *m_context;
     dpPatchAllocator m_palloc;
     patch_cont m_patches;
 
@@ -319,7 +337,7 @@ private:
 class dpBuilder
 {
 public:
-    dpBuilder();
+    dpBuilder(dpContext *ctx);
     ~dpBuilder();
     void addLoadPath(const char *path);
     void addSourcePath(const char *path);
@@ -336,6 +354,8 @@ private:
         std::string path;
         HANDLE notifier;
     };
+
+    dpContext *m_context;
     std::string m_vcvars;
     std::string m_msbuild;
     std::string m_msbuild_option;
@@ -348,17 +368,29 @@ private:
 };
 
 
-class DynamicPatcher
+class dpContext
 {
 public:
-    DynamicPatcher();
-    ~DynamicPatcher();
-
-    void update();
-
+    dpContext();
+    ~dpContext();
     dpBuilder* getBuilder();
     dpPatcher* getPatcher();
     dpLoader*  getLoader();
+
+    size_t load(const char *path);
+    bool   link();
+
+    size_t patchByFile(const char *filename, const char *filter_regex);
+    size_t patchByFile(const char *filename, const std::function<bool (const dpSymbol&)> &condition);
+    bool   patchByName(const char *symbol_name);
+    bool   patchByAddress(void *target, void *hook);
+    void*  getUnpatched(void *target);
+
+    void   addLoadPath(const char *path);
+    void   addSourcePath(const char *path);
+    bool   startAutoBuild(const char *msbuild_option, bool console=false);
+    bool   stopAutoBuild();
+    void   update();
 
 private:
     dpBuilder *m_builder;
@@ -366,11 +398,6 @@ private:
     dpLoader  *m_loader;
 };
 
-
-dpAPI DynamicPatcher* dpGetInstance();
-#define dpGetBuilder()  dpGetInstance()->getBuilder()
-#define dpGetPatcher()  dpGetInstance()->getPatcher()
-#define dpGetLoader()   dpGetInstance()->getLoader()
 
 
 
