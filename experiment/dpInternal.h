@@ -167,6 +167,7 @@ protected:
 class dpObjFile : public dpBinary
 {
 public:
+    static const dpFileType FileType= dpE_Obj;
     dpObjFile(dpContext *ctx);
     ~dpObjFile();
     void unload();
@@ -200,6 +201,7 @@ private:
 class dpLibFile : public dpBinary
 {
 public:
+    static const dpFileType FileType = dpE_Lib;
     dpLibFile(dpContext *ctx);
     ~dpLibFile();
     void unload();
@@ -235,6 +237,7 @@ private:
 class dpDllFile : public dpBinary
 {
 public:
+    static const dpFileType FileType = dpE_Dll;
     dpDllFile(dpContext *ctx);
     ~dpDllFile();
     void unload();
@@ -266,10 +269,12 @@ public:
     dpLoader(dpContext *ctx);
     ~dpLoader();
 
-    void      unload(dpBinary *bin);
-    dpBinary* loadBinary(const char *path); // path to .obj, .lib, .dll, .exe
-    bool      unloadBinary(const char *path);
-    bool      link();
+    dpBinary*  load(const char *path); // path to .obj, .lib, .dll, .exe
+    dpObjFile* loadObj(const char *path);
+    dpLibFile* loadLib(const char *path);
+    dpDllFile* loadDll(const char *path);
+    bool       unload(const char *path);
+    bool       link();
 
     size_t    getNumBinaries() const;
     dpBinary* getBinary(size_t index);
@@ -296,6 +301,10 @@ private:
     binary_cont m_binaries;
     binary_cont m_onload_queue;
     dpSymbolTable m_hostsymbols;
+
+    void       unloadImpl(dpBinary *bin);
+    template<class BinaryType>
+    BinaryType* loadBinaryImpl(const char *path);
 };
 
 
@@ -341,8 +350,8 @@ public:
     ~dpBuilder();
     void addLoadPath(const char *path);
     void addSourcePath(const char *path);
-    bool startAutoCompile(const char *build_options, bool create_console);
-    bool stopAutoCompile();
+    bool startAutoBuild(const char *build_options, bool create_console);
+    bool stopAutoBuild();
 
     void update();
     void watchFiles();
@@ -363,7 +372,7 @@ private:
     std::vector<std::string> m_loadpathes;
     bool m_create_console;
     mutable bool m_build_done;
-    bool m_flag_exit;
+    bool m_watchfile_stop;
     HANDLE m_thread_watchfile;
 };
 
@@ -377,8 +386,12 @@ public:
     dpPatcher* getPatcher();
     dpLoader*  getLoader();
 
-    size_t load(const char *path);
-    bool   link();
+    size_t     load(const char *path);
+    dpObjFile* loadObj(const char *path);
+    dpLibFile* loadLib(const char *path);
+    dpDllFile* loadDll(const char *path);
+    bool       unload(const char *path);
+    bool       link();
 
     size_t patchByFile(const char *filename, const char *filter_regex);
     size_t patchByFile(const char *filename, const std::function<bool (const dpSymbol&)> &condition);

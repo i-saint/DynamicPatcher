@@ -51,6 +51,10 @@ int main(int argc, char *argv[])
     dpAddSourcePath("Test_LibDll");
     dpStartAutoBuild("Test_LibDll.sln /target:Build /m /p:Configuration="dpConfiguration";Platform="dpPlatform, false);
 
+    // fail test
+    //dpLoadLib("Test_Dll.dll");
+    //dpLoadDll("Test_Lib.lib");
+
     printf("DynamicPatcher Test_UseLibDll\n");
     for(;;) {
         OverriddenByLib1();

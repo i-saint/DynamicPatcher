@@ -19,6 +19,7 @@
       <Filter>disasm-lib</Filter>
     </ClCompile>
     <ClCompile Include="dpFoundation.cpp" />
+    <ClCompile Include="dpContext.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DynamicPatcher.h" />

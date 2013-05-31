@@ -56,14 +56,71 @@ dpLoader::dpLoader(dpContext *ctx)
 dpLoader::~dpLoader()
 {
     m_hostsymbols.eachSymbols([&](const dpSymbol &sym){ delete[] sym.name; });
-    while(!m_binaries.empty()) { unload(m_binaries.front()); }
+    while(!m_binaries.empty()) { unloadImpl(m_binaries.front()); }
 }
 
-void dpLoader::unload( dpBinary *bin )
+void dpLoader::unloadImpl( dpBinary *bin )
 {
     m_binaries.erase(std::find(m_binaries.begin(), m_binaries.end(), bin));
     bin->callHandler(dpE_OnUnload);
     delete bin;
+}
+
+void dpLoader::addOnLoadList(dpBinary *bin)
+{
+    m_onload_queue.push_back(bin);
+}
+
+template<class BinaryType>
+BinaryType* dpLoader::loadBinaryImpl(const char *path)
+{
+    BinaryType *old = static_cast<BinaryType*>(findBinary(path));
+    if(old) {
+        dpTime t = dpGetFileModifiedTime(path);
+        if(t<=old->getLastModifiedTime()) { return old; }
+    }
+
+    BinaryType *ret = new BinaryType(m_context);
+    if(ret->loadFile(path)) {
+        if(old) { unloadImpl(old); }
+        m_binaries.push_back(ret);
+    }
+    else {
+        delete ret;
+        ret = nullptr;
+    }
+    return ret;
+}
+
+dpObjFile* dpLoader::loadObj(const char *path) { return loadBinaryImpl<dpObjFile>(path); }
+dpLibFile* dpLoader::loadLib(const char *path) { return loadBinaryImpl<dpLibFile>(path); }
+dpDllFile* dpLoader::loadDll(const char *path) { return loadBinaryImpl<dpDllFile>(path); }
+
+dpBinary* dpLoader::load(const char *path)
+{
+    size_t len = strlen(path);
+    if(len>=4) {
+        if     (_stricmp(&path[len-4], ".obj")==0) {
+            return loadObj(path);
+        }
+        else if(_stricmp(&path[len-4], ".lib")==0) {
+            return loadLib(path);
+        }
+        else if(_stricmp(&path[len-4], ".dll")==0 || _stricmp(&path[len-4], ".exe")==0) {
+            return loadDll(path);
+        }
+    }
+    dpPrint("dp error: unrecognized file %s\n", path);
+    return nullptr;
+}
+
+bool dpLoader::unload(const char *path)
+{
+    if(dpBinary *bin=findBinary(path)) {
+        unloadImpl(bin);
+        return true;
+    }
+    return false;
 }
 
 bool dpLoader::link()
@@ -97,59 +154,6 @@ bool dpLoader::link()
     m_onload_queue.clear();
 
     return ret;
-}
-
-void dpLoader::addOnLoadList(dpBinary *bin)
-{
-    m_onload_queue.push_back(bin);
-}
-
-dpBinary* dpLoader::loadBinary(const char *path)
-{
-    size_t len = strlen(path);
-    if(len < 4) { return nullptr; }
-
-    dpBinary *old = findBinary(path);
-    if(old) {
-        dpTime t = dpGetFileModifiedTime(path);
-        if(t<=old->getLastModifiedTime()) { return old; }
-    }
-
-    dpBinary *ret = nullptr;
-    if(!ret) {
-        if(_stricmp(&path[len-4], ".obj")==0) {
-            ret = new dpObjFile(m_context);
-        }
-        else if(_stricmp(&path[len-4], ".lib")==0) {
-            ret = new dpLibFile(m_context);
-        }
-        else if(_stricmp(&path[len-4], ".dll")==0 || _stricmp(&path[len-4], ".exe")==0) {
-            ret = new dpDllFile(m_context);
-        }
-        else {
-            dpPrint("dp error: unsupported file %s\n", path);
-            return nullptr;
-        }
-    }
-
-    if(ret->loadFile(path)) {
-        if(old) { unload(old); }
-        m_binaries.push_back(ret);
-    }
-    else {
-        delete ret;
-        ret = nullptr;
-    }
-    return ret;
-}
-
-bool dpLoader::unloadBinary( const char *path )
-{
-    if(dpBinary *bin=findBinary(path)) {
-        unload(bin);
-        return true;
-    }
-    return false;
 }
 
 const dpSymbol* dpLoader::findLoadedSymbolByName(const char *name)

@@ -8,7 +8,7 @@
 
 dpPatch void OverriddenByDll()
 {
-    printf("OverriddenByDll(): overridden!!!!!!\n");
+    printf("OverriddenByDll(): overridden!\n");
     typedef void (*OrigT)();
     OrigT f = (OrigT)dpGetUnpatched(&OverriddenByDll);
     f();

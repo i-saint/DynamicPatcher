@@ -10,7 +10,7 @@ dpBuilder::dpBuilder(dpContext *ctx)
     , m_msbuild_option()
     , m_create_console(false)
     , m_build_done(false)
-    , m_flag_exit(false)
+    , m_watchfile_stop(false)
     , m_thread_watchfile(NULL)
 {
     std::string VCVersion;
@@ -49,10 +49,7 @@ dpBuilder::dpBuilder(dpContext *ctx)
 
 dpBuilder::~dpBuilder()
 {
-    m_flag_exit = true;
-    if(m_thread_watchfile!=NULL) {
-        ::WaitForSingleObject(m_thread_watchfile, INFINITE);
-    }
+    stopAutoBuild();
     if(m_create_console) {
         ::FreeConsole();
     }
@@ -76,20 +73,28 @@ static void WatchFile( LPVOID arg )
     ((dpBuilder*)arg)->watchFiles();
 }
 
-bool dpBuilder::startAutoCompile(const char *build_options, bool create_console)
+bool dpBuilder::startAutoBuild(const char *build_options, bool create_console)
 {
     m_msbuild_option = build_options;
     m_create_console = create_console;
     if(create_console) {
         ::AllocConsole();
     }
+    m_watchfile_stop = false;
     m_thread_watchfile = (HANDLE)_beginthread( WatchFile, 0, this );
-    dpPrint("dp info: recompile thread started\n");
+    dpPrint("dp info: build thread started\n");
     return true;
 }
 
-bool dpBuilder::stopAutoCompile()
+bool dpBuilder::stopAutoBuild()
 {
+    m_watchfile_stop = true;
+    if(m_thread_watchfile!=nullptr) {
+        ::WaitForSingleObject(m_thread_watchfile, INFINITE);
+        m_thread_watchfile = nullptr;
+        dpPrint("dp info: build thread stopped\n");
+        return true;
+    }
     return false;
 }
 
@@ -101,7 +106,7 @@ void dpBuilder::watchFiles()
         m_srcpathes[i].notifier = ::FindFirstChangeNotificationA(m_srcpathes[i].path.c_str(), TRUE, FILE_NOTIFY_CHANGE_LAST_WRITE);
     }
 
-    while(!m_flag_exit) {
+    while(!m_watchfile_stop) {
         bool needs_build = false;
         for(size_t i=0; i<m_srcpathes.size(); ++i) {
             if(::WaitForSingleObject(m_srcpathes[i].notifier, 10)==WAIT_OBJECT_0) {
@@ -129,7 +134,7 @@ void dpBuilder::watchFiles()
 
 bool dpBuilder::build()
 {
-    dpPrint("dp info: recompile begin\n");
+    dpPrint("dp info: build begin\n");
     std::string command = m_msbuild;
     command+=' ';
     command+=m_msbuild_option;
@@ -153,7 +158,7 @@ bool dpBuilder::build()
             return false;
         }
     }
-    dpPrint("dp info: recompile end\n");
+    dpPrint("dp info: build end\n");
     return true;
 }
 
@@ -165,7 +170,7 @@ void dpBuilder::update()
         size_t num_loaded = 0;
         for(size_t i=0; i<m_loadpathes.size(); ++i) {
             dpGlob(m_loadpathes[i].c_str(), [&](const std::string &path){
-                if(dpGetLoader()->loadBinary(path.c_str())) {
+                if(dpGetLoader()->load(path.c_str())) {
                     ++num_loaded;
                 }
             });

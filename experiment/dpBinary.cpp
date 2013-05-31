@@ -83,6 +83,7 @@ bool dpObjFile::loadFile(const char *path)
     void *data;
     size_t size;
     if(!dpMapFile(path, data, size, dpAllocateModule)) {
+        dpPrint("dp error: file not found %s\n", path);
         return false;
     }
     return loadMemory(path, data, size, mtime);
@@ -322,7 +323,7 @@ const dpSymbolTable& dpObjFile::getSymbolTable() const      { return m_symbols; 
 const dpSymbolTable& dpObjFile::getExportTable() const      { return m_exports; }
 const char*          dpObjFile::getPath() const             { return m_path.c_str(); }
 dpTime               dpObjFile::getLastModifiedTime() const { return m_mtime; }
-dpFileType           dpObjFile::getFileType() const         { return dpE_Obj; }
+dpFileType           dpObjFile::getFileType() const         { return FileType; }
 void*                dpObjFile::getBaseAddress() const      { return m_data; }
 
 void* dpObjFile::resolveSymbol( const char *name )
@@ -374,6 +375,7 @@ bool dpLibFile::loadFile(const char *path)
     void *lib_data;
     size_t lib_size;
     if(!dpMapFile(path, lib_data, lib_size, malloc)) {
+        dpPrint("dp error: file not found %s\n", path);
         return false;
     }
     bool ret = loadMemory(path, lib_data, lib_size, mtime);
@@ -488,7 +490,7 @@ const dpSymbolTable& dpLibFile::getSymbolTable() const      { return m_symbols; 
 const dpSymbolTable& dpLibFile::getExportTable() const      { return m_exports; }
 const char*          dpLibFile::getPath() const             { return m_path.c_str(); }
 dpTime               dpLibFile::getLastModifiedTime() const { return m_mtime; }
-dpFileType           dpLibFile::getFileType() const         { return dpE_Lib; }
+dpFileType           dpLibFile::getFileType() const         { return FileType; }
 size_t               dpLibFile::getNumObjFiles() const      { return m_objs.size(); }
 dpObjFile*           dpLibFile::getObjFile(size_t i)        { return m_objs[i]; }
 dpObjFile* dpLibFile::findObjFile( const char *name )
@@ -564,7 +566,10 @@ bool dpDllFile::loadFile(const char *path)
     // dll をメモリに map
     void *data = nullptr;
     size_t datasize = 0;
-    if(!dpMapFile(path, data, datasize, malloc)) { return false; }
+    if(!dpMapFile(path, data, datasize, malloc)) {
+        dpPrint("dp error: file not found %s\n", path);
+        return false;
+    }
 
     // 一時ファイル名を算出
     char rev[8] = {0};
@@ -596,6 +601,9 @@ bool dpDllFile::loadFile(const char *path)
     if(loadMemory(path, module, 0, mtime)) {
         m_needs_freelibrary = true;
         return true;
+    }
+    else {
+        dpPrint("dp error: LoadLibraryA() failed. %s\n", path);
     }
     return false;
 }
@@ -634,4 +642,4 @@ const dpSymbolTable& dpDllFile::getSymbolTable() const      { return m_symbols; 
 const dpSymbolTable& dpDllFile::getExportTable() const      { return m_symbols; }
 const char*          dpDllFile::getPath() const             { return m_path.c_str(); }
 dpTime               dpDllFile::getLastModifiedTime() const { return m_mtime; }
-dpFileType           dpDllFile::getFileType() const         { return dpE_Dll; }
+dpFileType           dpDllFile::getFileType() const         { return FileType; }

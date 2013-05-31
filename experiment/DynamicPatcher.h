@@ -77,11 +77,12 @@ dpAPI void       dpDeleteContext(dpContext *ctx);
 dpAPI void       dpSetCurrentContext(dpContext *ctx); // current context is thread local
 dpAPI dpContext* dpGetCurrentContext(); // default is dpGetDefaultContext()
 
-dpAPI size_t dpLoad(const char *path); // path to .obj .lib .dll .exe. accept wildcard (x64/Debug/*.obj)
-dpAPI size_t dpLoadObj(const char *path); // load as .obj
-dpAPI size_t dpLoadLib(const char *path); // load as .lib
-dpAPI size_t dpLoadDll(const char *path); // load as .dll
-dpAPI bool   dpLink();
+dpAPI size_t dpLoad(const char *path); // path to .obj .lib .dll .exe. accept wildcard. (ex: x64/Debug/*.obj)
+dpAPI bool   dpLoadObj(const char *path); // load as obj regardless file extension
+dpAPI bool   dpLoadLib(const char *path); // load as lib regardless file extension
+dpAPI bool   dpLoadDll(const char *path); // load as dll regardless file extension
+dpAPI bool   dpUnload(const char *path);
+dpAPI bool   dpLink(); // must be called after dpLoad*()s & dpUnload()s. onload handler is called in this.
 
 dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex);
 #if _MSC_VER>=1600 // require C++11
@@ -91,7 +92,7 @@ dpAPI bool   dpPatchByName(const char *symbol_name);
 dpAPI bool   dpPatchByAddress(void *target, void *hook);
 dpAPI void*  dpGetUnpatched(void *target);
 
-dpAPI void   dpAddLoadPath(const char *path); // accept wildcard (x64/Debug/*.obj)
+dpAPI void   dpAddLoadPath(const char *path); // accept wildcard.
 dpAPI void   dpAddSourcePath(const char *path);
 dpAPI bool   dpStartAutoBuild(const char *msbuild_option, bool console=false);
 dpAPI bool   dpStopAutoBuild();
@@ -99,10 +100,10 @@ dpAPI void   dpUpdate();
 
 #else  // dpDisable
 
-#define dpPatch         
-#define dpNoInline      
-#define dpScope(...)    
-#define dpOnLoad(...)   
+#define dpPatch 
+#define dpNoInline 
+#define dpScope(...) 
+#define dpOnLoad(...) 
 #define dpOnUnload(...) 
 
 #define dpInitialize(...) 
@@ -118,6 +119,7 @@ dpAPI void   dpUpdate();
 #define dpLoadObj(...) 
 #define dpLoadLib(...) 
 #define dpLoadDll(...) 
+#define dpUnload(...) 
 #define dpLink(...) 
 #define dpPatchByFile(...) 
 #define dpPatchByName(...) 
