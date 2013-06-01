@@ -30,9 +30,40 @@ enum dpEventType {
     dpE_OnLoad,
     dpE_OnUnload,
 };
+enum dpLinkFlags {
+    dpE_NeedsLink=1,
+    dpE_NeedsBase=2,
+};
 
-struct dpPatchData {
-    dpSymbol symbol;
+struct dpSymbol
+{
+    const char *name;
+    void *address;
+    int flags;
+    int section;
+    dpBinary *binary;
+
+    dpSymbol(const char *nam, void *addr, int fla, int sect, dpBinary *bin)
+        : name(nam), address(addr), flags(fla), section(sect), binary(bin)
+    {}
+    const dpSymbolS& simplify() const { return (const dpSymbolS&)*this; }
+};
+inline bool operator< (const dpSymbol &a, const dpSymbol &b) { return strcmp(a.name, b.name)<0; }
+inline bool operator==(const dpSymbol &a, const dpSymbol &b) { return strcmp(a.name, b.name)==0; }
+
+template<class T>
+struct dpLTPtr {
+    bool operator()(const T *a, const T *b) const { return *a<*b; }
+};
+
+template<class T>
+struct dpEQPtr {
+    bool operator()(const T *a, const T *b) const { return *a==*b; }
+};
+
+struct dpPatchData
+{
+    const dpSymbol *symbol;
     void *orig;
     void *hook;
     void *trampoline;
@@ -40,11 +71,7 @@ struct dpPatchData {
 
     dpPatchData() : orig(), hook(), trampoline(), hook_size() {}
 };
-inline bool operator< (const dpPatchData &a, const dpPatchData &b) { return strcmp(a.symbol.name, b.symbol.name)<0; }
-inline bool operator==(const dpPatchData &a, const dpPatchData &b) { return strcmp(a.symbol.name, b.symbol.name)==0; }
 
-inline bool operator< (const dpSymbol &a, const dpSymbol &b) { return strcmp(a.name, b.name)<0; }
-inline bool operator==(const dpSymbol &a, const dpSymbol &b) { return strcmp(a.name, b.name)==0; }
 
 template<class Container, class F> inline void dpEach(Container &cont, const F &f);
 template<class Container, class F> inline auto dpFind(Container &cont, const F &f) -> decltype(cont.begin());
@@ -104,10 +131,28 @@ private:
     Page* findCandidatePage(void *location);
 };
 
+class dpSymbolAllocator
+{
+public:
+    static const size_t page_size = 1024*256;
+    static const size_t block_size = sizeof(dpSymbol);
+
+    dpSymbolAllocator();
+    ~dpSymbolAllocator();
+    void* allocate();
+    bool deallocate(void *v);
+
+private:
+    class Page;
+    typedef std::vector<Page*> page_cont;
+    page_cont m_pages;
+};
+
+
 class dpSymbolTable
 {
 public:
-    void addSymbol(const dpSymbol &v);
+    void addSymbol(dpSymbol *v);
     void merge(const dpSymbolTable &v);
     void sort();
     void clear();
@@ -119,16 +164,16 @@ public:
     const dpSymbol* findSymbolByName(const char *name) const;
     const dpSymbol* findSymbolByAddress(void *sym) const;
 
-    // F: [](const dpSymbol &sym)
+    // F: [](const dpSymbol *sym)
     template<class F>
-    void eachSymbols(const F &f) const
+    void eachSymbols(const F &f)
     {
         size_t n = getNumSymbols();
-        for(size_t i=0; i<n; ++i) { f(*getSymbol(i)); }
+        for(size_t i=0; i<n; ++i) { f(getSymbol(i)); }
     }
 
 private:
-    typedef std::vector<dpSymbol> symbol_cont;
+    typedef std::vector<dpSymbol*> symbol_cont;
     symbol_cont m_symbols;
 };
 
@@ -148,17 +193,13 @@ public:
     virtual bool link()=0;
     virtual bool callHandler(dpEventType e)=0;
 
-    virtual const dpSymbolTable& getSymbolTable() const=0;
-    virtual const dpSymbolTable& getExportTable() const=0;
-    virtual const char*          getPath() const=0;
-    virtual dpTime               getLastModifiedTime() const=0;
-    virtual dpFileType           getFileType() const=0;
+    virtual dpSymbolTable& getSymbolTable()=0;
+    virtual const char*    getPath() const=0;
+    virtual dpTime         getLastModifiedTime() const=0;
+    virtual dpFileType     getFileType() const=0;
 
-    // F: [](const dpSymbol &sym)
-    template<class F> void eachSymbols(const F &f) const { getSymbolTable().eachSymbols(f); }
-
-    // F: [](const dpSymbol &sym)
-    template<class F> void eachExports(const F &f) const { getExportTable().eachSymbols(f); }
+    // F: [](const dpSymbol *sym)
+    template<class F> void eachSymbols(const F &f) { getSymbolTable().eachSymbols(f); }
 
 protected:
     dpContext *m_context;
@@ -176,14 +217,22 @@ public:
     virtual bool link();
     virtual bool callHandler(dpEventType e);
 
-    virtual const dpSymbolTable& getSymbolTable() const;
-    virtual const dpSymbolTable& getExportTable() const;
-    virtual const char*          getPath() const;
-    virtual dpTime               getLastModifiedTime() const;
-    virtual dpFileType           getFileType() const;
-    void*                        getBaseAddress() const;
+    virtual dpSymbolTable& getSymbolTable();
+    virtual const char*    getPath() const;
+    virtual dpTime         getLastModifiedTime() const;
+    virtual dpFileType     getFileType() const;
+
+    void* getBaseAddress() const;
+    bool  link(int section);
 
 private:
+    struct LinkData
+    {
+        uint32_t flags;
+
+        LinkData() : flags(dpE_NeedsLink|dpE_NeedsBase) {}
+    };
+    typedef std::vector<LinkData> link_cont;
     typedef std::map<size_t, size_t> RelocBaseMap;
     void  *m_data;
     size_t m_size;
@@ -193,7 +242,6 @@ private:
     dpTime m_mtime;
     RelocBaseMap m_reloc_bases;
     dpSymbolTable m_symbols;
-    dpSymbolTable m_exports;
 
     void* resolveSymbol(const char *name);
 };
@@ -210,14 +258,13 @@ public:
     virtual bool link();
     virtual bool callHandler(dpEventType e);
 
-    virtual const dpSymbolTable& getSymbolTable() const;
-    virtual const dpSymbolTable& getExportTable() const;
-    virtual const char*          getPath() const;
-    virtual dpTime               getLastModifiedTime() const;
-    virtual dpFileType           getFileType() const;
-    size_t                       getNumObjFiles() const;
-    dpObjFile*                   getObjFile(size_t index);
-    dpObjFile*                   findObjFile(const char *name);
+    virtual dpSymbolTable& getSymbolTable();
+    virtual const char*    getPath() const;
+    virtual dpTime         getLastModifiedTime() const;
+    virtual dpFileType     getFileType() const;
+    size_t                 getNumObjFiles() const;
+    dpObjFile*             getObjFile(size_t index);
+    dpObjFile*             findObjFile(const char *name);
 
     template<class F>
     void eachObjs(const F &f) { dpEach(m_objs, f); }
@@ -226,7 +273,6 @@ private:
     typedef std::vector<dpObjFile*> obj_cont;
     obj_cont m_objs;
     dpSymbolTable m_symbols;
-    dpSymbolTable m_exports;
     std::string m_path;
     dpTime m_mtime;
 };
@@ -246,11 +292,10 @@ public:
     virtual bool link();
     virtual bool callHandler(dpEventType e);
 
-    virtual const dpSymbolTable& getSymbolTable() const;
-    virtual const dpSymbolTable& getExportTable() const;
-    virtual const char*          getPath() const;
-    virtual dpTime               getLastModifiedTime() const;
-    virtual dpFileType           getFileType() const;
+    virtual dpSymbolTable& getSymbolTable();
+    virtual const char*    getPath() const;
+    virtual dpTime         getLastModifiedTime() const;
+    virtual dpFileType     getFileType() const;
 
 private:
     HMODULE m_module;
@@ -280,9 +325,10 @@ public:
     dpBinary* getBinary(size_t index);
     dpBinary* findBinary(const char *name);
 
-    const dpSymbol* findLoadedSymbolByName(const char *name);
-    const dpSymbol* findHostSymbolByName(const char *name);
-    const dpSymbol* findHostSymbolByAddress(void *addr);
+    dpSymbol* findSymbol(const char *name);
+    dpSymbol* findAndLinkSymbol(const char *name);
+    dpSymbol* findHostSymbolByName(const char *name);
+    dpSymbol* findHostSymbolByAddress(void *addr);
 
     // F: [](dpBinary *bin)
     template<class F>
@@ -293,6 +339,8 @@ public:
     }
 
     void addOnLoadList(dpBinary *bin);
+    dpSymbol* newSymbol(const char *nam=nullptr, void *addr=nullptr, int fla=0, int sect=0, dpBinary *bin=nullptr);
+    void deleteSymbol(dpSymbol *sym);
 
 private:
     typedef std::vector<dpBinary*> binary_cont;
@@ -301,6 +349,7 @@ private:
     binary_cont m_binaries;
     binary_cont m_onload_queue;
     dpSymbolTable m_hostsymbols;
+    dpSymbolAllocator m_symalloc;
 
     void       unloadImpl(dpBinary *bin);
     template<class BinaryType>
@@ -313,7 +362,7 @@ class dpPatcher
 public:
     dpPatcher(dpContext *ctx);
     ~dpPatcher();
-    void*  patchByBinary(dpBinary *obj, const std::function<bool (const dpSymbol&)> &condition);
+    void*  patchByBinary(dpBinary *obj, const std::function<bool (const dpSymbolS&)> &condition);
     void*  patchByName(const char *name, void *hook);
     void*  patchByAddress(void *addr, void *hook);
     size_t unpatchByBinary(dpBinary *obj);
@@ -394,7 +443,7 @@ public:
     bool       link();
 
     size_t patchByFile(const char *filename, const char *filter_regex);
-    size_t patchByFile(const char *filename, const std::function<bool (const dpSymbol&)> &condition);
+    size_t patchByFile(const char *filename, const std::function<bool (const dpSymbolS&)> &condition);
     bool   patchByName(const char *symbol_name);
     bool   patchByAddress(void *target, void *hook);
     void*  getUnpatched(void *target);

@@ -6,20 +6,24 @@
 #define DynamicPatcher_h
 
 #ifndef dpDisable
-#include <functional>
 
-#ifdef _WIN64
+#if _MSC_VER>=1600 // dpPatchByFile() require C++11
+#   define dpWithStdFunction
+#endif // _MSC_VER>=1600
+
+#ifdef _M_X64
 #   define dpLibArch "64"
 #   define dpSymPrefix
-#else // _WIN64
+#else // _M_X64
 #   define dpLibArch 
 #   define dpSymPrefix "_"
-#endif //_WIN64
+#endif //_M_X64
 #ifdef _DEBUG
 #   define dpLibConfig "d"
 #else // _DEBUG
 #   define dpLibConfig 
 #endif //_DEBUG
+
 
 #if defined(dpDLLImpl)
 #   define dpAPI dpDLLExport
@@ -32,6 +36,9 @@
 #else
 #   define dpAPI
 #endif // dpDLL_Impl
+#ifdef dpWithStdFunction
+#   include <functional>
+#endif // dpWithStdFunction
 
 #define dpDLLExport     __declspec(dllexport)
 #define dpDLLImport     __declspec(dllimport)
@@ -54,16 +61,13 @@ enum dpSymbolFlags {
     dpE_Export  = 0x80, // dllexport
 };
 #define dpIsFunction(flag) ((flag&dpE_Code)!=0)
+#define dpIsExportFunction(flag) ((flag&(dpE_Code|dpE_Export))!=0)
 
-struct dpSymbol
+struct dpSymbolS
 {
     const char *name;
     void *address;
     int flags;
-
-    dpSymbol(const char *n=NULL, void *a=NULL, int f=0)
-        : name(n), address(a), flags(f)
-    {}
 };
 
 class dpContext;
@@ -85,9 +89,9 @@ dpAPI bool   dpUnload(const char *path);
 dpAPI bool   dpLink(); // must be called after dpLoad*()s & dpUnload()s. onload handler is called in this.
 
 dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex);
-#if _MSC_VER>=1600 // require C++11
-dpAPI size_t dpPatchByFile(const char *filename, const std::function<bool (const dpSymbol&)> &condition);
-#endif // _MSC_VER>=1600
+#ifdef dpWithStdFunction
+dpAPI size_t dpPatchByFile(const char *filename, const std::function<bool (const dpSymbolS&)> &condition);
+#endif // dpWithStdFunction
 dpAPI bool   dpPatchByName(const char *symbol_name);
 dpAPI bool   dpPatchByAddress(void *target, void *hook);
 dpAPI void*  dpGetUnpatched(void *target);

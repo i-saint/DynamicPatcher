@@ -7,9 +7,9 @@
 
 void dpCallOnLoadHandler(dpBinary *v);
 
-const dpSymbol* dpLoader::findHostSymbolByName(const char *name)
+dpSymbol* dpLoader::findHostSymbolByName(const char *name)
 {
-    if(const dpSymbol *sym = m_hostsymbols.findSymbolByName(name)) {
+    if(dpSymbol *sym = m_hostsymbols.findSymbolByName(name)) {
         return sym;
     }
 
@@ -22,14 +22,14 @@ const dpSymbol* dpLoader::findHostSymbolByName(const char *name)
     }
     char *namebuf = new char[sinfo->NameLen+1];
     strncpy(namebuf, sinfo->Name, sinfo->NameLen+1);
-    m_hostsymbols.addSymbol(dpSymbol(namebuf, (void*)sinfo->Address, 0));
+    m_hostsymbols.addSymbol(newSymbol(namebuf, (void*)sinfo->Address, 0, 0, nullptr));
     m_hostsymbols.sort();
     return m_hostsymbols.findSymbolByName(name);
 }
 
-const dpSymbol* dpLoader::findHostSymbolByAddress(void *addr)
+dpSymbol* dpLoader::findHostSymbolByAddress(void *addr)
 {
-    if(const dpSymbol *sym = m_hostsymbols.findSymbolByAddress(addr)) {
+    if(dpSymbol *sym = m_hostsymbols.findSymbolByAddress(addr)) {
         return sym;
     }
 
@@ -42,7 +42,7 @@ const dpSymbol* dpLoader::findHostSymbolByAddress(void *addr)
     }
     char *namebuf = new char[sinfo->NameLen+1];
     strncpy(namebuf, sinfo->Name, sinfo->NameLen+1);
-    m_hostsymbols.addSymbol(dpSymbol(namebuf, (void*)sinfo->Address, 0));
+    m_hostsymbols.addSymbol(newSymbol(namebuf, (void*)sinfo->Address, 0, 0, nullptr));
     m_hostsymbols.sort();
     return m_hostsymbols.findSymbolByAddress(addr);
 }
@@ -55,8 +55,11 @@ dpLoader::dpLoader(dpContext *ctx)
 
 dpLoader::~dpLoader()
 {
-    m_hostsymbols.eachSymbols([&](const dpSymbol &sym){ delete[] sym.name; });
     while(!m_binaries.empty()) { unloadImpl(m_binaries.front()); }
+    m_hostsymbols.eachSymbols([&](dpSymbol *sym){
+        delete[] sym->name;
+        deleteSymbol(sym);
+    });
 }
 
 void dpLoader::unloadImpl( dpBinary *bin )
@@ -144,9 +147,9 @@ bool dpLoader::link()
 
     // 新規ロードされているオブジェクトに OnLoad があれば呼ぶ & dpPatch つき symbol を patch する
     dpEach(m_onload_queue, [&](dpBinary *b){
-        b->eachExports([&](const dpSymbol &sym){
-            if(dpIsFunction(sym.flags)) {
-                dpGetPatcher()->patchByName(sym.name, sym.address);
+        b->eachSymbols([&](const dpSymbol *sym){
+            if(dpIsExportFunction(sym->flags)) {
+                dpGetPatcher()->patchByName(sym->name, sym->address);
             }
         });
         b->callHandler(dpE_OnLoad);
@@ -156,13 +159,21 @@ bool dpLoader::link()
     return ret;
 }
 
-const dpSymbol* dpLoader::findLoadedSymbolByName(const char *name)
+dpSymbol* dpLoader::findSymbol(const char *name)
 {
     size_t n = m_binaries.size();
     for(size_t i=0; i<n; ++i) {
-        if(const dpSymbol *s = m_binaries[i]->getSymbolTable().findSymbolByName(name)) {
+        if(dpSymbol *s = m_binaries[i]->getSymbolTable().findSymbolByName(name)) {
             return s;
         }
+    }
+    return nullptr;
+}
+
+dpSymbol* dpLoader::findAndLinkSymbol(const char *name)
+{
+    if(dpSymbol *sym=findSymbol(name)) {
+        return nullptr;
     }
     return nullptr;
 }
@@ -183,4 +194,14 @@ dpBinary* dpLoader::findBinary(const char *name)
         [=](dpBinary *b){ return _stricmp(b->getPath(), name)==0; }
     );
     return p!=m_binaries.end() ? *p : nullptr;
+}
+
+dpSymbol* dpLoader::newSymbol(const char *nam, void *addr, int fla, int sect, dpBinary *bin)
+{
+    return new (m_symalloc.allocate()) dpSymbol(nam, addr, fla, sect, bin);
+}
+
+void dpLoader::deleteSymbol(dpSymbol *sym)
+{
+    m_symalloc.deallocate(sym);
 }

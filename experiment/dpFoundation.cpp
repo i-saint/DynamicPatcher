@@ -287,7 +287,6 @@ bool dpPatchAllocator::Page::isInsideJumpRange( void *p ) const
 }
 
 
-
 dpPatchAllocator::dpPatchAllocator()
 {
 }
@@ -340,21 +339,130 @@ dpPatchAllocator::Page* dpPatchAllocator::findCandidatePage(void *location)
 
 
 
-void dpSymbolTable::addSymbol(const dpSymbol &v)
+
+class dpSymbolAllocator::Page
+{
+public:
+    struct Block {
+        union {
+            char data[block_size];
+            Block *next;
+        };
+    };
+    Page();
+    ~Page();
+    void* allocate();
+    bool deallocate(void *v);
+    bool isInsideMemory(void *p) const;
+    bool isInsideJumpRange(void *p) const;
+
+private:
+    void *m_data;
+    Block *m_freelist;
+};
+
+dpSymbolAllocator::Page::Page()
+    : m_data(nullptr), m_freelist(nullptr)
+{
+    m_data = malloc(page_size);
+    m_freelist = (Block*)m_data;
+    size_t n = page_size / block_size;
+    for(size_t i=0; i<n-1; ++i) {
+        m_freelist[i].next = m_freelist+i+1;
+    }
+    m_freelist[n-1].next = nullptr;
+}
+
+dpSymbolAllocator::Page::~Page()
+{
+    free(m_data);
+}
+
+void* dpSymbolAllocator::Page::allocate()
+{
+    void *ret = nullptr;
+    if(m_freelist) {
+        ret = m_freelist;
+        m_freelist = m_freelist->next;
+    }
+    return ret;
+}
+
+bool dpSymbolAllocator::Page::deallocate(void *v)
+{
+    if(v==nullptr) { return false; }
+    bool ret = false;
+    if(isInsideMemory(v)) {
+        Block *b = (Block*)v;
+        b->next = m_freelist;
+        m_freelist = b;
+        ret = true;
+    }
+    return ret;
+}
+
+bool dpSymbolAllocator::Page::isInsideMemory(void *p) const
+{
+    size_t loc = (size_t)p;
+    size_t base = (size_t)m_data;
+    return loc>=base && loc<base+page_size;
+}
+
+
+dpSymbolAllocator::dpSymbolAllocator()
+{
+}
+
+dpSymbolAllocator::~dpSymbolAllocator()
+{
+    dpEach(m_pages, [](Page *p){ delete p; });
+    m_pages.clear();
+}
+
+void* dpSymbolAllocator::allocate()
+{
+    for(size_t i=0; i<m_pages.size(); ++i) {
+        if(void *ret=m_pages[i]->allocate()) {
+            return ret;
+        }
+    }
+
+    Page *p = new Page();
+    m_pages.push_back(p);
+    return p->allocate();
+}
+
+bool dpSymbolAllocator::deallocate(void *v)
+{
+    auto p = dpFind(m_pages, [=](const Page *p){ return p->isInsideMemory(v); });
+    if(p!=m_pages.end()) {
+        (*p)->deallocate(v);
+        return true;
+    }
+    return false;
+}
+
+
+
+void dpSymbolTable::addSymbol(dpSymbol *v)
 {
     m_symbols.push_back(v);
 }
 
 void dpSymbolTable::merge(const dpSymbolTable &v)
 {
-    dpEach(v.m_symbols, [&](const dpSymbol &sym){ m_symbols.push_back(sym); });
+    dpEach(v.m_symbols, [&](const dpSymbol *sym){
+        m_symbols.push_back( const_cast<dpSymbol*>(sym) );
+    });
     sort();
 }
 
 void dpSymbolTable::sort()
 {
-    std::sort(m_symbols.begin(), m_symbols.end());
-    m_symbols.erase(std::unique(m_symbols.begin(), m_symbols.end()), m_symbols.end());
+    std::sort(m_symbols.begin(), m_symbols.end(), dpLTPtr<dpSymbol>());
+    m_symbols.erase(
+        std::unique(m_symbols.begin(), m_symbols.end(), dpEQPtr<dpSymbol>()),
+        m_symbols.end());
 }
 
 void dpSymbolTable::clear()
@@ -369,23 +477,23 @@ size_t dpSymbolTable::getNumSymbols() const
 
 dpSymbol* dpSymbolTable::getSymbol(size_t i)
 {
-    return &m_symbols[i];
+    return m_symbols[i];
 }
 
 dpSymbol* dpSymbolTable::findSymbolByName(const char *name)
 {
-    dpSymbol tmp(name, nullptr, 0);
-    auto p = std::lower_bound(m_symbols.begin(), m_symbols.end(), tmp);
-    if(p!=m_symbols.end() && *p==tmp) {
-        return &(*p);
+    dpSymbol tmp(name, nullptr, 0, 0, nullptr);
+    auto p = std::lower_bound(m_symbols.begin(), m_symbols.end(), &tmp, dpLTPtr<dpSymbol>());
+    if(p!=m_symbols.end() && **p==tmp) {
+        return *p;
     }
     return nullptr;
 }
 
 dpSymbol* dpSymbolTable::findSymbolByAddress( void *addr )
 {
-    auto p = dpFind(m_symbols, [=](const dpSymbol &sym){ return sym.address==addr; });
-    return p==m_symbols.end() ? nullptr : &(*p);
+    auto p = dpFind(m_symbols, [=](const dpSymbol *sym){ return sym->address==addr; });
+    return p==m_symbols.end() ? nullptr : *p;
 }
 
 const dpSymbol* dpSymbolTable::getSymbol(size_t i) const

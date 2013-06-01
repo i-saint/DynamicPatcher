@@ -70,7 +70,7 @@ dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex)
     return dpGetCurrentContext()->patchByFile(filename, filter_regex);
 }
 
-dpAPI size_t dpPatchByFile(const char *filename, const std::function<bool (const dpSymbol&)> &condition)
+dpAPI size_t dpPatchByFile(const char *filename, const std::function<bool (const dpSymbolS&)> &condition)
 {
     return dpGetCurrentContext()->patchByFile(filename, condition);
 }

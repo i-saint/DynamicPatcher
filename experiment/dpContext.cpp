@@ -44,7 +44,7 @@ size_t dpContext::patchByFile(const char *filename, const char *filter_regex)
     if(dpBinary *bin=m_loader->findBinary(filename)) {
         std::regex reg(filter_regex);
         m_patcher->patchByBinary(bin,
-            [&](const dpSymbol &sym){
+            [&](const dpSymbolS &sym){
                 return std::regex_search(sym.name, reg);
         });
         return true;
@@ -52,7 +52,7 @@ size_t dpContext::patchByFile(const char *filename, const char *filter_regex)
     return false;
 }
 
-size_t dpContext::patchByFile(const char *filename, const std::function<bool (const dpSymbol&)> &condition)
+size_t dpContext::patchByFile(const char *filename, const std::function<bool (const dpSymbolS&)> &condition)
 {
     if(dpBinary *bin=m_loader->findBinary(filename)) {
         m_patcher->patchByBinary(bin, condition);
@@ -64,7 +64,7 @@ size_t dpContext::patchByFile(const char *filename, const std::function<bool (co
 bool dpContext::patchByName(const char *name)
 {
     if(const dpSymbol *sym=m_loader->findHostSymbolByName(name)) {
-        if(const dpSymbol *hook=m_loader->findLoadedSymbolByName(sym->name)) {
+        if(const dpSymbol *hook=m_loader->findSymbol(sym->name)) {
             m_patcher->patchByAddress(sym->address, hook->address);
             return true;
         }

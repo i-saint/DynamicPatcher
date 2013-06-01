@@ -89,7 +89,7 @@ void dpPatcher::patch(dpPatchData &pi)
 {
     // 元コードの退避先
     BYTE *hook = (BYTE*)pi.hook;
-    BYTE *target = (BYTE*)pi.symbol.address;
+    BYTE *target = (BYTE*)pi.symbol->address;
     BYTE *preserved = (BYTE*)m_palloc.allocate(target);
     DWORD old;
     ::VirtualProtect(target, 32, PAGE_EXECUTE_READWRITE, &old);
@@ -123,9 +123,9 @@ void dpPatcher::patch(dpPatchData &pi)
 void dpPatcher::unpatch(dpPatchData &pi)
 {
     DWORD old;
-    ::VirtualProtect(pi.symbol.address, 32, PAGE_EXECUTE_READWRITE, &old);
-    dpCopyInstructions(pi.symbol.address, pi.orig, pi.hook_size);
-    ::VirtualProtect(pi.symbol.address, 32, old, &old);
+    ::VirtualProtect(pi.symbol->address, 32, PAGE_EXECUTE_READWRITE, &old);
+    dpCopyInstructions(pi.symbol->address, pi.orig, pi.hook_size);
+    ::VirtualProtect(pi.symbol->address, 32, old, &old);
     m_palloc.deallocate(pi.orig);
     m_palloc.deallocate(pi.trampoline);
 }
@@ -141,11 +141,11 @@ dpPatcher::~dpPatcher()
     unpatchAll();
 }
 
-void* dpPatcher::patchByBinary(dpBinary *obj, const std::function<bool (const dpSymbol&)> &condition)
+void* dpPatcher::patchByBinary(dpBinary *obj, const std::function<bool (const dpSymbolS&)> &condition)
 {
-    obj->eachSymbols([&](const dpSymbol &sym){
-        if(dpIsFunction(sym.flags) && condition(sym)) {
-            patchByName(sym.name, sym.address);
+    obj->eachSymbols([&](const dpSymbol *sym){
+        if(dpIsFunction(sym->flags) && condition(sym->simplify())) {
+            patchByName(sym->name, sym->address);
         }
     });
     return nullptr;
@@ -157,7 +157,7 @@ void* dpPatcher::patchByName(const char *name, void *hook)
         unpatchByAddress(sym->address);
 
         dpPatchData pi;
-        pi.symbol = *sym;
+        pi.symbol = sym;
         pi.hook = hook;
         patch(pi);
         m_patches.push_back(pi);
@@ -184,7 +184,7 @@ void* dpPatcher::patchByAddress(void *addr, void *hook)
         unpatchByAddress(sym->address);
 
         dpPatchData pi;
-        pi.symbol = *sym;
+        pi.symbol = sym;
         pi.hook = hook;
         patch(pi);
         m_patches.push_back(pi);
@@ -201,14 +201,12 @@ void* dpPatcher::patchByAddress(void *addr, void *hook)
 size_t dpPatcher::unpatchByBinary(dpBinary *obj)
 {
     size_t n = 0;
-    obj->eachSymbols([&](const dpSymbol &sym){
-        if(dpPatchData *p = findPatchByName(sym.name)) {
-            if(p->hook==sym.address) {
-                dpPrintUnpatch(sym);
-                unpatch(*p);
-                m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
-                ++n;
-            }
+    obj->eachSymbols([&](const dpSymbol *sym){
+        if(dpPatchData *p = findPatchByAddress(sym->address)) {
+            dpPrintUnpatch(*sym);
+            unpatch(*p);
+            m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
+            ++n;
         }
     });
     return n;
@@ -217,7 +215,7 @@ size_t dpPatcher::unpatchByBinary(dpBinary *obj)
 bool dpPatcher::unpatchByName(const char *name)
 {
     if(dpPatchData *p = findPatchByName(name)) {
-        dpPrintUnpatch(p->symbol);
+        dpPrintUnpatch(*p->symbol);
         unpatch(*p);
         m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
         return true;
@@ -228,7 +226,7 @@ bool dpPatcher::unpatchByName(const char *name)
 bool dpPatcher::unpatchByAddress(void *addr)
 {
     if(dpPatchData *p = findPatchByAddress(addr)) {
-        dpPrintUnpatch(p->symbol);
+        dpPrintUnpatch(*p->symbol);
         unpatch(*p);
         m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
         return true;
@@ -244,18 +242,12 @@ void dpPatcher::unpatchAll()
 
 dpPatchData* dpPatcher::findPatchByName(const char *name)
 {
-    dpPatchData *r = nullptr;
-    eachPatchData([&](dpPatchData &p){
-        if(strcmp(p.symbol.name, name)==0) { r=&p; }
-    });
-    return r;
+    auto p = dpFind(m_patches, [=](const dpPatchData &pat){return strcmp(pat.symbol->name, name)==0;});
+    return p==m_patches.end() ? nullptr : &(*p);
 }
 
 dpPatchData* dpPatcher::findPatchByAddress(void *addr)
 {
-    dpPatchData *r = nullptr;
-    eachPatchData([&](dpPatchData &p){
-        if(p.symbol.address==addr || p.hook==addr) { r=&p; }
-    });
-    return r;
+    auto p = dpFind(m_patches, [=](const dpPatchData &pat){return pat.symbol->address==addr || pat.hook==addr;});
+    return p==m_patches.end() ? nullptr : &(*p);
 }
