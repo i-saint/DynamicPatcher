@@ -75,14 +75,24 @@ dpAPI size_t dpPatchByFile(const char *filename, const std::function<bool (const
     return dpGetCurrentContext()->patchByFile(filename, condition);
 }
 
-dpAPI bool dpPatchByName(const char *name)
+dpAPI bool dpPatchNameToName(const char *target_name, const char *hook_name)
 {
-    return dpGetCurrentContext()->patchByName(name);
+    return dpGetCurrentContext()->patchNameToName(target_name, hook_name);
 }
 
-dpAPI bool dpPatchByAddress(void *target, void *hook)
+dpAPI bool dpPatchAddressToName(const char *target_name, void *hook_addr)
 {
-    return dpGetCurrentContext()->patchByAddress(target, hook);
+    return dpGetCurrentContext()->patchAddressToName(target_name, hook_addr);
+}
+
+dpAPI bool dpPatchAddressToAddress(void *target_adr, void *hook_addr)
+{
+    return dpGetCurrentContext()->patchAddressToAddress(target_adr, hook_addr);
+}
+
+dpAPI bool dpPatchByAddress(void *hook_addr)
+{
+    return dpGetCurrentContext()->patchByAddress(hook_addr);
 }
 
 dpAPI void* dpGetUnpatched(void *target)

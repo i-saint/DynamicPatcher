@@ -63,6 +63,10 @@ private:
 int Test::s_value = 42;
 const int Test::s_cvalue = 42;
 
+dpNoInline void Test_ThisMaybeOverridden()
+{
+    printf("Test_ThisMaybeOverridden()\n");
+}
 
 int main(int argc, char *argv[])
 {
@@ -79,6 +83,7 @@ int main(int argc, char *argv[])
         Test test;
         while(!test.getEndFlag()) {
             test.doSomething();
+            Test_ThisMaybeOverridden();
 
             ::Sleep(3000);
             dpUpdate();
@@ -89,8 +94,7 @@ int main(int argc, char *argv[])
 
 
 dpOnLoad(
-    dpPatchByAddress(&puts, &puts_hook);
-    //dpPatchByFile(dpObjDir"/Test_Simple.obj", ".*Test.*");
+    dpPatchAddressToAddress(&puts, &puts_hook);
 )
 
 dpOnUnload(

@@ -1,0 +1,5 @@
+target_process: "Test_Simple.exe"
+target_update_function: "?Test_ThisMaybeOverridden@@YAXXZ"
+hook_update_function: "?Test_ThisMaybeOverridden@@YAXXZ"
+msbuild_command: "Test_Inject.vcxproj /target:ClCompile /m /p:Configuration=Debug;Platform=Win32"
+load_list: "_tmp\Test_Inject_Win32Debug\Test_Inject.obj"

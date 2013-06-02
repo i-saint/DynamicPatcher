@@ -59,9 +59,10 @@ enum dpSymbolFlags {
     dpE_Execute = 0x20, // executable
     dpE_Shared  = 0x40, // shared
     dpE_Export  = 0x80, // dllexport
+    dpE_Handler = 0x100, // dpOnLoad, dpOnUnload, etc
 };
 #define dpIsFunction(flag) ((flag&dpE_Code)!=0)
-#define dpIsExportFunction(flag) ((flag&(dpE_Code|dpE_Export))!=0)
+#define dpIsExportFunction(flag) ((flag&(dpE_Code|dpE_Export|dpE_Handler))==(dpE_Code|dpE_Export))
 
 struct dpSymbolS
 {
@@ -92,8 +93,10 @@ dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex);
 #ifdef dpWithStdFunction
 dpAPI size_t dpPatchByFile(const char *filename, const std::function<bool (const dpSymbolS&)> &condition);
 #endif // dpWithStdFunction
-dpAPI bool   dpPatchByName(const char *symbol_name);
-dpAPI bool   dpPatchByAddress(void *target, void *hook);
+dpAPI bool   dpPatchNameToName(const char *target_name, const char *hook_name);
+dpAPI bool   dpPatchAddressToName(const char *target_name, void *hook_addr);
+dpAPI bool   dpPatchAddressToAddress(void *target, void *hook_addr);
+dpAPI bool   dpPatchByAddress(void *hook_addr); // patch the host symbol that have same name of hook
 dpAPI void*  dpGetUnpatched(void *target);
 
 dpAPI void   dpAddLoadPath(const char *path); // accept wildcard.
@@ -101,6 +104,8 @@ dpAPI void   dpAddSourcePath(const char *path);
 dpAPI bool   dpStartAutoBuild(const char *msbuild_option, bool console=false);
 dpAPI bool   dpStopAutoBuild();
 dpAPI void   dpUpdate();
+
+dpAPI void   dpPrint(const char* fmt, ...);
 
 #else  // dpDisable
 
@@ -126,7 +131,9 @@ dpAPI void   dpUpdate();
 #define dpUnload(...) 
 #define dpLink(...) 
 #define dpPatchByFile(...) 
-#define dpPatchByName(...) 
+#define dpPatchNameToName(...) 
+#define dpPatchAddressToName(...) 
+#define dpPatchAddressToAddress(...) 
 #define dpPatchByAddress(...) 
 #define dpGetUnpatched(...) 
 
@@ -135,6 +142,8 @@ dpAPI void   dpUpdate();
 #define dpStartAutoBuild(...) 
 #define dpStopAutoBuild(...) 
 #define dpUpdate(...) 
+
+#define dpPrint(...) 
 
 #endif // dpDisable
 

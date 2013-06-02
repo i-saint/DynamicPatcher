@@ -61,21 +61,42 @@ size_t dpContext::patchByFile(const char *filename, const std::function<bool (co
     return false;
 }
 
-bool dpContext::patchByName(const char *name)
+bool dpContext::patchNameToName(const char *target_name, const char *hook_name)
 {
-    if(const dpSymbol *sym=m_loader->findHostSymbolByName(name)) {
-        if(const dpSymbol *hook=m_loader->findSymbol(sym->name)) {
-            m_patcher->patchByAddress(sym->address, hook->address);
-            return true;
+    if(dpSymbol *target=m_loader->findHostSymbolByName(target_name)) {
+        if(dpSymbol *hook=m_loader->findAndLinkSymbolByName(hook_name)) {
+            return m_patcher->patch(target, hook)!=nullptr;
         }
     }
     return false;
 }
 
-bool dpContext::patchByAddress(void *target, void *hook)
+bool dpContext::patchAddressToName(const char *target_name, void *hook_addr)
 {
-    if(m_patcher->patchByAddress(target, hook)) {
-        return true;
+    if(dpSymbol *target=m_loader->findHostSymbolByName(target_name)) {
+        if(dpSymbol *hook=m_loader->findAndLinkSymbolByAddress(hook_addr)) {
+            return m_patcher->patch(target, hook)!=nullptr;
+        }
+    }
+    return false;
+}
+
+bool dpContext::patchAddressToAddress(void *target_addr, void *hook_addr)
+{
+    if(dpSymbol *target=m_loader->findHostSymbolByAddress(target_addr)) {
+        if(dpSymbol *hook=m_loader->findAndLinkSymbolByAddress(hook_addr)) {
+            return m_patcher->patch(target, hook)!=nullptr;
+        }
+    }
+    return false;
+}
+
+bool dpContext::patchByAddress(void *hook_addr)
+{
+    if(dpSymbol *hook=m_loader->findAndLinkSymbolByAddress(hook_addr)) {
+        if(dpSymbol *target=m_loader->findHostSymbolByName(hook->name)) {
+            return m_patcher->patch(target, hook)!=nullptr;
+        }
     }
     return false;
 }
@@ -83,7 +104,7 @@ bool dpContext::patchByAddress(void *target, void *hook)
 void* dpContext::getUnpatched(void *target)
 {
     if(dpPatchData *pd = m_patcher->findPatchByAddress(target)) {
-        return pd->orig;
+        return pd->unpatched;
     }
     return nullptr;
 }

@@ -147,9 +147,9 @@ bool dpLoader::link()
 
     // 新規ロードされているオブジェクトに OnLoad があれば呼ぶ & dpPatch つき symbol を patch する
     dpEach(m_onload_queue, [&](dpBinary *b){
-        b->eachSymbols([&](const dpSymbol *sym){
+        b->eachSymbols([&](dpSymbol *sym){
             if(dpIsExportFunction(sym->flags)) {
-                dpGetPatcher()->patchByName(sym->name, sym->address);
+                dpGetPatcher()->patch(findHostSymbolByName(sym->name), sym);
             }
         });
         b->callHandler(dpE_OnLoad);
@@ -159,7 +159,7 @@ bool dpLoader::link()
     return ret;
 }
 
-dpSymbol* dpLoader::findSymbol(const char *name)
+dpSymbol* dpLoader::findSymbolByName(const char *name)
 {
     size_t n = m_binaries.size();
     for(size_t i=0; i<n; ++i) {
@@ -170,10 +170,31 @@ dpSymbol* dpLoader::findSymbol(const char *name)
     return nullptr;
 }
 
-dpSymbol* dpLoader::findAndLinkSymbol(const char *name)
+dpSymbol* dpLoader::findSymbolByAddress(void *addr)
 {
-    if(dpSymbol *sym=findSymbol(name)) {
-        return nullptr;
+    size_t n = m_binaries.size();
+    for(size_t i=0; i<n; ++i) {
+        if(dpSymbol *s = m_binaries[i]->getSymbolTable().findSymbolByAddress(addr)) {
+            return s;
+        }
+    }
+    return nullptr;
+}
+
+dpSymbol* dpLoader::findAndLinkSymbolByName(const char *name)
+{
+    if(dpSymbol *sym=findSymbolByName(name)) {
+        // todo: partial link
+        return sym;
+    }
+    return nullptr;
+}
+
+dpSymbol* dpLoader::findAndLinkSymbolByAddress(void *addr)
+{
+    if(dpSymbol *sym=findSymbolByAddress(addr)) {
+        // todo: partial link
+        return sym;
     }
     return nullptr;
 }

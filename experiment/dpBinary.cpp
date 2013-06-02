@@ -199,6 +199,8 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
             }
         }
     }
+    if(dpSymbol *s=getSymbolTable().findSymbolByName(g_symname_onload))   { s->flags |= dpE_Handler; }
+    if(dpSymbol *s=getSymbolTable().findSymbolByName(g_symname_onunload)) { s->flags |= dpE_Handler; }
 
     dpGetLoader()->addOnLoadList(this);
     return true;
@@ -333,7 +335,7 @@ void* dpObjFile::resolveSymbol( const char *name )
         }
     }
     if(!sym) {
-        if(const dpSymbol *s=dpGetLoader()->findSymbol(name)) {
+        if(const dpSymbol *s=dpGetLoader()->findSymbolByName(name)) {
             sym = s->address;
         }
     }

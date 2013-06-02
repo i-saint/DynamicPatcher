@@ -85,19 +85,19 @@ static BYTE* dpAddJumpInstruction(BYTE* from, BYTE* to)
     return from;
 }
 
-void dpPatcher::patch(dpPatchData &pi)
+void dpPatcher::patchImpl(dpPatchData &pi)
 {
     // 元コードの退避先
-    BYTE *hook = (BYTE*)pi.hook;
-    BYTE *target = (BYTE*)pi.symbol->address;
-    BYTE *preserved = (BYTE*)m_palloc.allocate(target);
+    BYTE *hook = (BYTE*)pi.hook->address;
+    BYTE *target = (BYTE*)pi.target->address;
+    BYTE *unpatched = (BYTE*)m_palloc.allocate(target);
     DWORD old;
     ::VirtualProtect(target, 32, PAGE_EXECUTE_READWRITE, &old);
     HANDLE proc = ::GetCurrentProcess();
 
     // 元のコードをコピー & 最後にコピー本へ jmp するコードを付加 (==これを call すれば上書き前の動作をするハズ)
-    size_t slice = dpCopyInstructions(preserved, target, 5);
-    dpAddJumpInstruction(preserved+slice, target+slice);
+    size_t stab_size = dpCopyInstructions(unpatched, target, 5);
+    dpAddJumpInstruction(unpatched+stab_size, target+stab_size);
 
     // 距離が 32bit に収まらない場合、長距離 jmp で飛ぶコードを挟む。
     // (長距離 jmp は 14byte 必要なので直接書き込もうとすると容量が足りない可能性が出てくる)
@@ -116,17 +116,17 @@ void dpPatcher::patch(dpPatchData &pi)
     }
     ::VirtualProtect(target, 32, old, &old);
 
-    pi.orig = preserved;
-    pi.hook_size = slice;
+    pi.unpatched = unpatched;
+    pi.unpatched_size = stab_size;
 }
 
-void dpPatcher::unpatch(dpPatchData &pi)
+void dpPatcher::unpatchImpl(dpPatchData &pi)
 {
     DWORD old;
-    ::VirtualProtect(pi.symbol->address, 32, PAGE_EXECUTE_READWRITE, &old);
-    dpCopyInstructions(pi.symbol->address, pi.orig, pi.hook_size);
-    ::VirtualProtect(pi.symbol->address, 32, old, &old);
-    m_palloc.deallocate(pi.orig);
+    ::VirtualProtect(pi.target->address, 32, PAGE_EXECUTE_READWRITE, &old);
+    dpCopyInstructions(pi.target->address, pi.unpatched, pi.unpatched_size);
+    ::VirtualProtect(pi.target->address, 32, old, &old);
+    m_palloc.deallocate(pi.unpatched);
     m_palloc.deallocate(pi.trampoline);
 }
 
@@ -143,33 +143,33 @@ dpPatcher::~dpPatcher()
 
 void* dpPatcher::patchByBinary(dpBinary *obj, const std::function<bool (const dpSymbolS&)> &condition)
 {
-    obj->eachSymbols([&](const dpSymbol *sym){
+    obj->eachSymbols([&](dpSymbol *sym){
         if(dpIsFunction(sym->flags) && condition(sym->simplify())) {
-            patchByName(sym->name, sym->address);
+            patch(dpGetLoader()->findHostSymbolByName(sym->name), sym);
         }
     });
     return nullptr;
 }
 
-void* dpPatcher::patchByName(const char *name, void *hook)
+void* dpPatcher::patch(dpSymbol *target, dpSymbol *hook)
 {
-    if(const dpSymbol *sym = dpGetLoader()->findHostSymbolByName(name)) {
-        unpatchByAddress(sym->address);
+    if(!target || !hook) { return nullptr; }
 
-        dpPatchData pi;
-        pi.symbol = sym;
-        pi.hook = hook;
-        patch(pi);
-        m_patches.push_back(pi);
-        {
-            char demangled[1024];
-            dpDemangle(sym->name, demangled, sizeof(demangled));
-            dpPrint("dp info: patched %s (%s)\n", sym->name, demangled);
-        }
-        return pi.orig;
+    unpatch(target);
+
+    dpPatchData pi;
+    pi.target = target;
+    pi.hook = hook;
+    patchImpl(pi);
+    m_patches.push_back(pi);
+    {
+        char demangled[1024];
+        dpDemangle(target->name, demangled, sizeof(demangled));
+        dpPrint("dp info: patched %s (%s)\n", target->name, demangled);
     }
-    return nullptr;
+    return pi.unpatched;
 }
+
 
 inline void dpPrintUnpatch(const dpSymbol &sym)
 {
@@ -178,33 +178,13 @@ inline void dpPrintUnpatch(const dpSymbol &sym)
     dpPrint("dp info: unpatched %s (%s)\n", sym.name, demangled);
 }
 
-void* dpPatcher::patchByAddress(void *addr, void *hook)
-{
-    if(const dpSymbol *sym=dpGetLoader()->findHostSymbolByAddress(addr)) {
-        unpatchByAddress(sym->address);
-
-        dpPatchData pi;
-        pi.symbol = sym;
-        pi.hook = hook;
-        patch(pi);
-        m_patches.push_back(pi);
-        {
-            char demangled[1024];
-            dpDemangle(sym->name, demangled, sizeof(demangled));
-            dpPrint("dp info: patched %s (%s)\n", sym->name, demangled);
-        }
-        return pi.orig;
-    }
-    return nullptr;
-}
-
 size_t dpPatcher::unpatchByBinary(dpBinary *obj)
 {
     size_t n = 0;
-    obj->eachSymbols([&](const dpSymbol *sym){
+    obj->eachSymbols([&](dpSymbol *sym){
         if(dpPatchData *p = findPatchByAddress(sym->address)) {
             dpPrintUnpatch(*sym);
-            unpatch(*p);
+            unpatchImpl(*p);
             m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
             ++n;
         }
@@ -212,22 +192,11 @@ size_t dpPatcher::unpatchByBinary(dpBinary *obj)
     return n;
 }
 
-bool dpPatcher::unpatchByName(const char *name)
-{
-    if(dpPatchData *p = findPatchByName(name)) {
-        dpPrintUnpatch(*p->symbol);
-        unpatch(*p);
-        m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
-        return true;
-    }
-    return false;
-}
-
-bool dpPatcher::unpatchByAddress(void *addr)
+bool dpPatcher::unpatch(void *addr)
 {
     if(dpPatchData *p = findPatchByAddress(addr)) {
-        dpPrintUnpatch(*p->symbol);
-        unpatch(*p);
+        dpPrintUnpatch(*p->target);
+        unpatchImpl(*p);
         m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
         return true;
     }
@@ -236,18 +205,25 @@ bool dpPatcher::unpatchByAddress(void *addr)
 
 void dpPatcher::unpatchAll()
 {
-    eachPatchData([&](dpPatchData &p){ unpatch(p); });
+    eachPatchData([&](dpPatchData &p){
+        dpPrintUnpatch(*p.target);
+        unpatchImpl(p);
+    });
     m_patches.clear();
 }
 
 dpPatchData* dpPatcher::findPatchByName(const char *name)
 {
-    auto p = dpFind(m_patches, [=](const dpPatchData &pat){return strcmp(pat.symbol->name, name)==0;});
+    auto p = dpFind(m_patches, [=](const dpPatchData &pat){
+        return strcmp(pat.target->name, name)==0;
+    });
     return p==m_patches.end() ? nullptr : &(*p);
 }
 
 dpPatchData* dpPatcher::findPatchByAddress(void *addr)
 {
-    auto p = dpFind(m_patches, [=](const dpPatchData &pat){return pat.symbol->address==addr || pat.hook==addr;});
+    auto p = dpFind(m_patches, [=](const dpPatchData &pat){
+        return pat.target->address==addr || pat.hook->address==addr;
+    });
     return p==m_patches.end() ? nullptr : &(*p);
 }

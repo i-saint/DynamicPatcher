@@ -19,7 +19,7 @@ void dpPrintV(const char* fmt, va_list vl)
     ::OutputDebugStringA(buf);
 }
 
-void dpPrint(const char* fmt, ...)
+dpAPI void dpPrint(const char* fmt, ...)
 {
     va_list vl;
     va_start(vl, fmt);

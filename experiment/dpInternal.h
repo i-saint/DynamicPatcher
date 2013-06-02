@@ -63,20 +63,19 @@ struct dpEQPtr {
 
 struct dpPatchData
 {
-    const dpSymbol *symbol;
-    void *orig;
-    void *hook;
+    const dpSymbol *target;
+    const dpSymbol *hook;
+    void *unpatched;
     void *trampoline;
-    size_t hook_size;
+    size_t unpatched_size;
 
-    dpPatchData() : orig(), hook(), trampoline(), hook_size() {}
+    dpPatchData() : target(), hook(), unpatched(), trampoline(), unpatched_size() {}
 };
 
 
 template<class Container, class F> inline void dpEach(Container &cont, const F &f);
 template<class Container, class F> inline auto dpFind(Container &cont, const F &f) -> decltype(cont.begin());
 
-void    dpPrint(const char* fmt, ...);
 void*   dpAllocateForward(size_t size, void *location);
 void*   dpAllocateBackward(size_t size, void *location);
 void*   dpAllocateModule(size_t size);
@@ -325,8 +324,10 @@ public:
     dpBinary* getBinary(size_t index);
     dpBinary* findBinary(const char *name);
 
-    dpSymbol* findSymbol(const char *name);
-    dpSymbol* findAndLinkSymbol(const char *name);
+    dpSymbol* findSymbolByName(const char *name);
+    dpSymbol* findSymbolByAddress(void *addr);
+    dpSymbol* findAndLinkSymbolByName(const char *name);
+    dpSymbol* findAndLinkSymbolByAddress(void *addr);
     dpSymbol* findHostSymbolByName(const char *name);
     dpSymbol* findHostSymbolByAddress(void *addr);
 
@@ -363,11 +364,9 @@ public:
     dpPatcher(dpContext *ctx);
     ~dpPatcher();
     void*  patchByBinary(dpBinary *obj, const std::function<bool (const dpSymbolS&)> &condition);
-    void*  patchByName(const char *name, void *hook);
-    void*  patchByAddress(void *addr, void *hook);
+    void*  patch(dpSymbol *target, dpSymbol *hook);
     size_t unpatchByBinary(dpBinary *obj);
-    bool   unpatchByName(const char *name);
-    bool   unpatchByAddress(void *addr);
+    bool   unpatch(void *patched);
     void   unpatchAll();
 
     dpPatchData* findPatchByName(const char *name);
@@ -387,8 +386,8 @@ private:
     dpPatchAllocator m_palloc;
     patch_cont m_patches;
 
-    void patch(dpPatchData &pi);
-    void unpatch(dpPatchData &pi);
+    void patchImpl(dpPatchData &pi);
+    void unpatchImpl(dpPatchData &pi);
 };
 
 
@@ -444,8 +443,10 @@ public:
 
     size_t patchByFile(const char *filename, const char *filter_regex);
     size_t patchByFile(const char *filename, const std::function<bool (const dpSymbolS&)> &condition);
-    bool   patchByName(const char *symbol_name);
-    bool   patchByAddress(void *target, void *hook);
+    bool   patchNameToName(const char *target_name, const char *hook_name);
+    bool   patchAddressToName(const char *target_name, void *hook);
+    bool   patchAddressToAddress(void *target, void *hook);
+    bool   patchByAddress(void *hook);
     void*  getUnpatched(void *target);
 
     void   addLoadPath(const char *path);
