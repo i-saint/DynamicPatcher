@@ -38,7 +38,9 @@ enum dpLinkFlags {
 enum dpSymbolFlagsEx {
     dpE_HostSymbol      = 0x10000,
     dpE_NameNeedsDelete = 0x20000,
+    dpE_LinkFailed      = 0x40000,
 };
+#define dpIsLinkFailed(flag) ((flag&dpE_LinkFailed)!=0)
 
 struct dpSymbol
 {

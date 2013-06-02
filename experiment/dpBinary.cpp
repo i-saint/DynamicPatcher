@@ -17,13 +17,17 @@ typedef void (*dpEventHandler)();
 static inline void dpCallOnLoadHandler(dpBinary *v)
 {
     if(const dpSymbol *sym = v->getSymbolTable().findSymbolByName(g_symname_onload)) {
-        ((dpEventHandler)sym->address)();
+        if(!dpIsLinkFailed(sym->flags)) {
+            ((dpEventHandler)sym->address)();
+        }
     }
 }
 static inline void dpCallOnUnloadHandler(dpBinary *v)
 {
     if(const dpSymbol *sym = v->getSymbolTable().findSymbolByName(g_symname_onunload)) {
-        ((dpEventHandler)sym->address)();
+        if(!dpIsLinkFailed(sym->flags)) {
+            ((dpEventHandler)sym->address)();
+        }
     }
 }
 
@@ -247,7 +251,7 @@ bool dpObjFile::partialLink(size_t si)
     if(si < pImageHeader->NumberOfSections) {
         IMAGE_SECTION_HEADER &sect = pSectionHeader[si];
         size_t SectionBase = (size_t)(ImageBase + (int)sect.PointerToRawData);
-        dpPrintDetail("partial link %s SECT%X, \"%s\"\n", getPath(), si, sect.Name);
+        dpPrintDetail("partial link %s SECT%X \"%s\"\n", getPath(), si, sect.Name);
 
         DWORD NumRelocations = sect.NumberOfRelocations;
         DWORD FirstRelocation = 0;
@@ -328,6 +332,9 @@ bool dpObjFile::partialLink(size_t si)
 
     if(!ret) {
         ld.flags |= dpE_NeedsLink;
+        eachSymbols([&](dpSymbol *sym){
+            if(sym->section==si) { sym->flags|=dpE_LinkFailed; }
+        });
     }
     return ret;
 }
