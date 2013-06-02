@@ -40,6 +40,9 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Inject", "Test_Inject.
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Injected", "Test_Injected.vcxproj", "{4256E731-91A4-44B7-993C-13CA2CFDF71B}"
+	ProjectSection(ProjectDependencies) = postProject
+		{7CCD61E5-5F56-4050-BACC-1467972D2247} = {7CCD61E5-5F56-4050-BACC-1467972D2247}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

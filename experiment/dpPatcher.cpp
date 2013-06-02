@@ -118,6 +118,12 @@ void dpPatcher::patchImpl(dpPatchData &pi)
 
     pi.unpatched = unpatched;
     pi.unpatched_size = stab_size;
+
+    {
+        char demangled[1024];
+        dpDemangle(pi.target->name, demangled, sizeof(demangled));
+        dpPrint("dp info: patched 0x%p -> 0x%p (\"%s\" : \"%s\")\n", pi.target->address, pi.hook->address, demangled, pi.target->name);
+    }
 }
 
 void dpPatcher::unpatchImpl(dpPatchData &pi)
@@ -128,6 +134,12 @@ void dpPatcher::unpatchImpl(dpPatchData &pi)
     ::VirtualProtect(pi.target->address, 32, old, &old);
     m_palloc.deallocate(pi.unpatched);
     m_palloc.deallocate(pi.trampoline);
+
+    {
+        char demangled[1024];
+        dpDemangle(pi.target->name, demangled, sizeof(demangled));
+        dpPrint("dp info: unpatched 0x%p (\"%s\" : \"%s\")\n", pi.target->address, demangled, pi.target->name);
+    }
 }
 
 
@@ -155,35 +167,22 @@ void* dpPatcher::patch(dpSymbol *target, dpSymbol *hook)
 {
     if(!target || !hook) { return nullptr; }
 
-    unpatch(target);
+    unpatch(target->address);
 
     dpPatchData pi;
     pi.target = target;
     pi.hook = hook;
     patchImpl(pi);
     m_patches.push_back(pi);
-    {
-        char demangled[1024];
-        dpDemangle(target->name, demangled, sizeof(demangled));
-        dpPrint("dp info: patched %s (%s)\n", target->name, demangled);
-    }
     return pi.unpatched;
 }
 
-
-inline void dpPrintUnpatch(const dpSymbol &sym)
-{
-    char demangled[1024];
-    dpDemangle(sym.name, demangled, sizeof(demangled));
-    dpPrint("dp info: unpatched %s (%s)\n", sym.name, demangled);
-}
 
 size_t dpPatcher::unpatchByBinary(dpBinary *obj)
 {
     size_t n = 0;
     obj->eachSymbols([&](dpSymbol *sym){
         if(dpPatchData *p = findPatchByAddress(sym->address)) {
-            dpPrintUnpatch(*sym);
             unpatchImpl(*p);
             m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
             ++n;
@@ -195,7 +194,6 @@ size_t dpPatcher::unpatchByBinary(dpBinary *obj)
 bool dpPatcher::unpatch(void *addr)
 {
     if(dpPatchData *p = findPatchByAddress(addr)) {
-        dpPrintUnpatch(*p->target);
         unpatchImpl(*p);
         m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
         return true;
@@ -206,7 +204,6 @@ bool dpPatcher::unpatch(void *addr)
 void dpPatcher::unpatchAll()
 {
     eachPatchData([&](dpPatchData &p){
-        dpPrintUnpatch(*p.target);
         unpatchImpl(p);
     });
     m_patches.clear();

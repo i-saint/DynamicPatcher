@@ -11,7 +11,7 @@ dpBuilder::dpBuilder(dpContext *ctx)
     , m_create_console(false)
     , m_build_done(false)
     , m_watchfile_stop(false)
-    , m_thread_watchfile(NULL)
+    , m_thread_watchfile(nullptr)
 {
     std::string VCVersion;
 #if     _MSC_VER==1500
@@ -79,21 +79,24 @@ static void WatchFile( LPVOID arg )
 
 bool dpBuilder::startAutoBuild(const char *build_options, bool create_console)
 {
-    m_msbuild_option = build_options;
-    m_create_console = create_console;
-    if(create_console) {
-        ::AllocConsole();
+    if(!m_thread_watchfile) {
+        m_msbuild_option = build_options;
+        m_create_console = create_console;
+        if(create_console) {
+            ::AllocConsole();
+        }
+        m_watchfile_stop = false;
+        m_thread_watchfile = (HANDLE)_beginthread( WatchFile, 0, this );
+        dpPrint("dp info: build thread started\n");
+        return true;
     }
-    m_watchfile_stop = false;
-    m_thread_watchfile = (HANDLE)_beginthread( WatchFile, 0, this );
-    dpPrint("dp info: build thread started\n");
-    return true;
+    return false;
 }
 
 bool dpBuilder::stopAutoBuild()
 {
-    m_watchfile_stop = true;
     if(m_thread_watchfile!=nullptr) {
+        m_watchfile_stop = true;
         ::WaitForSingleObject(m_thread_watchfile, INFINITE);
         m_thread_watchfile = nullptr;
         dpPrint("dp info: build thread stopped\n");

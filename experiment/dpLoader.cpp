@@ -66,6 +66,7 @@ void dpLoader::unloadImpl( dpBinary *bin )
 {
     m_binaries.erase(std::find(m_binaries.begin(), m_binaries.end(), bin));
     bin->callHandler(dpE_OnUnload);
+    dpPrint("dp info: unloaded \"%s\"\n", bin->getPath());
     delete bin;
 }
 
@@ -87,6 +88,7 @@ BinaryType* dpLoader::loadBinaryImpl(const char *path)
     if(ret->loadFile(path)) {
         if(old) { unloadImpl(old); }
         m_binaries.push_back(ret);
+        dpPrint("dp info: loaded \"%s\"\n", path);
     }
     else {
         delete ret;
