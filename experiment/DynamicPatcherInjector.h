@@ -9,10 +9,7 @@
 struct Options
 {
     std::string target_process;
-    std::string target_update_function;
-    std::string hook_update_function;
-    std::string msbuild_command;
-    std::vector<std::string> load_list;
+    std::vector<std::string> load_module;
 
     Options()
     {
@@ -23,11 +20,8 @@ struct Options
         char opt[1024];
         if(FILE *f=fopen(conf, "rb")) {
             while(fgets(line, _countof(line), f)) {
-                if     (sscanf(line, "target_process: \"%[^\"]\"", opt))         { target_process=opt; }
-                else if(sscanf(line, "target_update_function: \"%[^\"]\"", opt)) { target_update_function=opt; }
-                else if(sscanf(line, "hook_update_function: \"%[^\"]\"", opt))   { hook_update_function=opt; }
-                else if(sscanf(line, "msbuild_command: \"%[^\"]\"", opt))        { msbuild_command=opt; }
-                else if(sscanf(line, "load_list: \"%[^\"]\"", opt))              { load_list.push_back(opt); }
+                if     (sscanf(line, "target_process: \"%[^\"]\"", opt)) { target_process=opt; }
+                else if(sscanf(line, "load_module: \"%[^\"]\"", opt))    { load_module.push_back(opt); }
             }
             fclose(f);
         }

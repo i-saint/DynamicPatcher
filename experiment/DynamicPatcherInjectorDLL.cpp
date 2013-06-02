@@ -11,28 +11,15 @@
 #define dpLinkDynamic
 #include "DynamicPatcher.h"
 
-#ifdef _M_IX64
-#   define InjectorDLL "DynamicPatcher64.dll"
-#else
-#   define InjectorDLL "DynamicPatcher.dll"
-#endif // _M_IX86
-
-
-void OnUpdate()
-{
-    dpUpdate();
-}
 
 void OnLoad()
 {
     Options opt;
     dpInitialize();
-    dpStartAutoBuild(opt.msbuild_command.c_str(), false);
-    for(size_t i=0; i<opt.load_list.size(); ++i) {
-        dpLoad(opt.load_list[i].c_str());
+    for(size_t i=0; i<opt.load_module.size(); ++i) {
+        dpLoad(opt.load_module[i].c_str());
     }
     dpLink();
-    dpPatchNameToName(opt.target_process.c_str(), opt.hook_update_function.c_str());
 }
 
 void OnUnload()

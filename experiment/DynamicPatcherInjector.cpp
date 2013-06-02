@@ -10,11 +10,9 @@
 
 #ifdef _M_IX64
 #   define InjectorDLL       "DynamicPatcherInjectorDLL64.dll"
-#   define DynamicPatcherDLL "DynamicPatcher64.dll"
-#else
+#else // _M_IX86
 #   define InjectorDLL       "DynamicPatcherInjectorDLL.dll"
-#   define DynamicPatcherDLL "DynamicPatcher.dll"
-#endif // _M_IX86
+#endif // _M_IX64
 
 // VirtualAllocEx で dll の path を対象プロセスに書き込み、
 // CreateRemoteThread で対象プロセスにスレッドを作って、↑で書き込んだ dll path をパラメータにして LoadLibraryA を呼ぶ。
