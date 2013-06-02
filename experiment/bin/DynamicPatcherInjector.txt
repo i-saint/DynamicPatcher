@@ -1,0 +1,4 @@
+target_process: "PathToTarget.exe"
+load_module: "path\to\objs\*.obj"
+load_module: "and\or\libs\*.lib"
+load_module: "and\or\dlls\*.dll"
