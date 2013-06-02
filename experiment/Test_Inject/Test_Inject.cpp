@@ -19,6 +19,11 @@
 #define dpObjDir "_tmp/Test_Inject_" dpPlatform dpConfiguration 
 
 
+//dpNoInline bool GetEndFlag()
+//{
+//    return true;
+//}
+
 dpNoInline void Test_ThisMaybeOverridden()
 {
     printf("Test_Inject.cpp: Overridden!\n");
@@ -34,6 +39,7 @@ dpOnLoad(
     dpStartAutoBuild("Test_Inject.vcxproj /target:ClCompile /m /p:Configuration="dpConfiguration";Platform="dpPlatform, false);
 
     dpPatchByAddress(&Test_ThisMaybeOverridden);
+    dpPatchByAddress(&GetEndFlag);
 )
 
 dpOnUnload(
