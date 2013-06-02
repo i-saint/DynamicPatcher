@@ -84,8 +84,9 @@ enum dpLogLevel {
 };
 enum dpSystemFlags {
     dpE_AutoPatchExportFunctions = 0x1, // patch exported (dllexport==dpPatch) functions automatically when the module is loaded
+    dpE_DelayedLink = 0x2,
 
-    dpE_SysDefault = dpE_AutoPatchExportFunctions,
+    dpE_SysDefault = dpE_AutoPatchExportFunctions|dpE_DelayedLink,
 };
 
 struct dpConfig
@@ -123,7 +124,8 @@ dpAPI bool   dpPatchNameToName(const char *target_name, const char *hook_name);
 dpAPI bool   dpPatchAddressToName(const char *target_name, void *hook_addr);
 dpAPI bool   dpPatchAddressToAddress(void *target, void *hook_addr);
 dpAPI bool   dpPatchByAddress(void *hook_addr); // patch the host symbol that have same name of hook
-dpAPI void*  dpGetUnpatched(void *target);
+dpAPI bool   dpUnpatchByAddress(void *target_or_hook_addr);
+dpAPI void*  dpGetUnpatched(void *target_or_hook_addr);
 
 dpAPI void   dpAddLoadPath(const char *path); // accept wildcard.
 dpAPI void   dpAddSourcePath(const char *path);
@@ -161,6 +163,7 @@ dpAPI void   dpPrint(const char* fmt, ...);
 #define dpPatchAddressToName(...) 
 #define dpPatchAddressToAddress(...) 
 #define dpPatchByAddress(...) 
+#define dpUnpatchByAddress(...)
 #define dpGetUnpatched(...) 
 
 #define dpAddLoadPath(...) 

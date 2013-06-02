@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <vector>
 #include <string>
+#include <set>
 #include <map>
 #include <algorithm>
 
@@ -76,6 +77,8 @@ struct dpPatchData
 
     dpPatchData() : target(), hook(), unpatched(), trampoline(), unpatched_size() {}
 };
+inline bool operator< (const dpPatchData &a, const dpPatchData &b) { return a.target< b.target; }
+inline bool operator==(const dpPatchData &a, const dpPatchData &b) { return a.target==b.target; }
 
 
 template<class Container, class F> inline void dpEach(Container &cont, const F &f);
@@ -120,14 +123,14 @@ private:
     size_t m_used;
 };
 
-class dpPatchAllocator
+class dpTrampolineAllocator
 {
 public:
     static const size_t page_size = 1024*64;
     static const size_t block_size = 32;
 
-    dpPatchAllocator();
-    ~dpPatchAllocator();
+    dpTrampolineAllocator();
+    ~dpTrampolineAllocator();
     void* allocate(void *location);
     bool deallocate(void *v);
 
@@ -141,14 +144,15 @@ private:
     Page* findCandidatePage(void *location);
 };
 
-class dpSymbolAllocator
+template<size_t PageSize, size_t BlockSize>
+class dpBlockAllocator
 {
 public:
-    static const size_t page_size = 1024*256;
-    static const size_t block_size = sizeof(dpSymbol);
+    static const size_t page_size = PageSize;
+    static const size_t block_size = BlockSize;
 
-    dpSymbolAllocator();
-    ~dpSymbolAllocator();
+    dpBlockAllocator();
+    ~dpBlockAllocator();
     void* allocate();
     bool deallocate(void *v);
 
@@ -157,7 +161,7 @@ private:
     typedef std::vector<Page*> page_cont;
     page_cont m_pages;
 };
-
+typedef dpBlockAllocator<1024*256, sizeof(dpSymbol)> dpSymbolAllocator;
 
 class dpSymbolTable
 {
@@ -236,7 +240,7 @@ public:
     bool  link(int section);
 
 private:
-    struct LinkData
+    struct LinkData // section と対になるデータ
     {
         uint32_t flags;
 
@@ -378,28 +382,22 @@ public:
     void*  patch(dpSymbol *target, dpSymbol *hook);
     size_t unpatchByBinary(dpBinary *obj);
     bool   unpatchByAddress(void *patched);
-    bool   unpatch(dpPatchData *pat);
     void   unpatchAll();
 
     dpPatchData* findPatchByName(const char *name);
     dpPatchData* findPatchByAddress(void *addr);
 
-    template<class F>
-    void eachPatchData(const F &f)
-    {
-        size_t n = m_patches.size();
-        for(size_t i=0; i<n; ++i) { f(m_patches[i]); }
-    }
-
 private:
-    typedef std::vector<dpPatchData> patch_cont;
+    typedef std::set<dpPatchData> patch_cont;
 
-    dpContext *m_context;
-    dpPatchAllocator m_palloc;
-    patch_cont m_patches;
+    dpContext             *m_context;
+    dpTrampolineAllocator m_talloc;
+    patch_cont            m_patches;
 
-    void patchImpl(dpPatchData &pi);
-    void unpatchImpl(dpPatchData &pi);
+    void         patchImpl(dpPatchData &pi);
+    void         unpatchImpl(const dpPatchData &pi);
+    patch_cont::iterator findPatchByNameImpl(const char *name);
+    patch_cont::iterator findPatchByAddressImpl(void *addr);
 };
 
 
@@ -459,7 +457,8 @@ public:
     bool   patchAddressToName(const char *target_name, void *hook);
     bool   patchAddressToAddress(void *target, void *hook);
     bool   patchByAddress(void *hook);
-    void*  getUnpatched(void *target);
+    bool   unpatchByAddress(void *target_or_hook_addr);
+    void*  getUnpatched(void *target_or_hook_addr);
 
     void   addLoadPath(const char *path);
     void   addSourcePath(const char *path);

@@ -68,32 +68,32 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <IncludePath>$(SolutionDir);$(SolutionDir)\external;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir);$(DXSDK_DIR)lib\x86;$(LibraryPath)</LibraryPath>
+    <IncludePath>..;$(IncludePath)</IncludePath>
+    <LibraryPath>..;$(DXSDK_DIR)lib\x86;$(LibraryPath)</LibraryPath>
     <TargetName>$(ProjectName)</TargetName>
     <OutDir>$(ProjectDir)</OutDir>
     <IntDir>_tmp\$(ProjectName)_$(Platform)$(Configuration)\</IntDir>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(SolutionDir);$(SolutionDir)\external;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir);$(DXSDK_DIR)lib\x86;$(LibraryPath)</LibraryPath>
+    <IncludePath>..;$(IncludePath)</IncludePath>
+    <LibraryPath>..;$(DXSDK_DIR)lib\x86;$(LibraryPath)</LibraryPath>
     <TargetName>$(ProjectName)</TargetName>
     <OutDir>$(ProjectDir)\</OutDir>
     <IntDir>_tmp\$(ProjectName)_$(Platform)$(Configuration)\</IntDir>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <IncludePath>$(SolutionDir);$(SolutionDir)\external;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir);$(DXSDK_DIR)lib\x86;$(LibraryPath)</LibraryPath>
+    <IncludePath>..;$(IncludePath)</IncludePath>
+    <LibraryPath>..;$(DXSDK_DIR)lib\x86;$(LibraryPath)</LibraryPath>
     <TargetName>$(ProjectName)</TargetName>
     <OutDir>$(ProjectDir)\</OutDir>
     <IntDir>_tmp\$(ProjectName)_$(Platform)$(Configuration)\</IntDir>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(SolutionDir);$(SolutionDir)\external;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir);$(DXSDK_DIR)lib\x86;$(LibraryPath)</LibraryPath>
+    <IncludePath>..;$(IncludePath)</IncludePath>
+    <LibraryPath>..;$(DXSDK_DIR)lib\x86;$(LibraryPath)</LibraryPath>
     <TargetName>$(ProjectName)</TargetName>
     <OutDir>$(ProjectDir)\</OutDir>
     <IntDir>_tmp\$(ProjectName)_$(Platform)$(Configuration)\</IntDir>

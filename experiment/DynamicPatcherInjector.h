@@ -39,8 +39,12 @@ struct Options
             char module_path[MAX_PATH];
             GetModuleDirectory(module_path, _countof(module_path));
             config_path += module_path;
-            if(__argc>2) { config_path += __argv[1] ;}
-            else         { config_path += "DynamicPatcherInjector.txt";}
+
+            // todo:
+            // 引数で設定ファイル変えられるようにしたいところだが、別プロセス内で動く dll にもそれを伝えないといけないのでめんどい。
+            // とりあえず後回し。
+            //if(__argc>2) { config_path += __argv[1] ;}
+            config_path += "DynamicPatcherInjector.txt";
         }
 
         char line[1024];

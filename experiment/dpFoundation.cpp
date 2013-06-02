@@ -263,7 +263,7 @@ size_t dpSectionAllocator::getUsed() const { return m_used; }
 
 
 
-class dpPatchAllocator::Page
+class dpTrampolineAllocator::Page
 {
 public:
     struct Block {
@@ -284,7 +284,7 @@ private:
     Block *m_freelist;
 };
 
-dpPatchAllocator::Page::Page(void *base)
+dpTrampolineAllocator::Page::Page(void *base)
     : m_data(nullptr), m_freelist(nullptr)
 {
     m_data = dpAllocateBackward(page_size, base);
@@ -296,12 +296,12 @@ dpPatchAllocator::Page::Page(void *base)
     m_freelist[n-1].next = nullptr;
 }
 
-dpPatchAllocator::Page::~Page()
+dpTrampolineAllocator::Page::~Page()
 {
     dpDeallocate(m_data, page_size);
 }
 
-void* dpPatchAllocator::Page::allocate()
+void* dpTrampolineAllocator::Page::allocate()
 {
     void *ret = nullptr;
     if(m_freelist) {
@@ -311,7 +311,7 @@ void* dpPatchAllocator::Page::allocate()
     return ret;
 }
 
-bool dpPatchAllocator::Page::deallocate(void *v)
+bool dpTrampolineAllocator::Page::deallocate(void *v)
 {
     if(v==nullptr) { return false; }
     bool ret = false;
@@ -324,14 +324,14 @@ bool dpPatchAllocator::Page::deallocate(void *v)
     return ret;
 }
 
-bool dpPatchAllocator::Page::isInsideMemory(void *p) const
+bool dpTrampolineAllocator::Page::isInsideMemory(void *p) const
 {
     size_t loc = (size_t)p;
     size_t base = (size_t)m_data;
     return loc>=base && loc<base+page_size;
 }
 
-bool dpPatchAllocator::Page::isInsideJumpRange( void *p ) const
+bool dpTrampolineAllocator::Page::isInsideJumpRange( void *p ) const
 {
     size_t loc = (size_t)p;
     size_t base = (size_t)m_data;
@@ -340,17 +340,17 @@ bool dpPatchAllocator::Page::isInsideJumpRange( void *p ) const
 }
 
 
-dpPatchAllocator::dpPatchAllocator()
+dpTrampolineAllocator::dpTrampolineAllocator()
 {
 }
 
-dpPatchAllocator::~dpPatchAllocator()
+dpTrampolineAllocator::~dpTrampolineAllocator()
 {
     dpEach(m_pages, [](Page *p){ delete p; });
     m_pages.clear();
 }
 
-void* dpPatchAllocator::allocate(void *location)
+void* dpTrampolineAllocator::allocate(void *location)
 {
     void *ret = nullptr;
     if(Page *page=findCandidatePage(location)) {
@@ -363,7 +363,7 @@ void* dpPatchAllocator::allocate(void *location)
     return ret;
 }
 
-bool dpPatchAllocator::deallocate(void *v)
+bool dpTrampolineAllocator::deallocate(void *v)
 {
     if(Page *page=findOwnerPage(v)) {
         return page->deallocate(v);
@@ -371,20 +371,20 @@ bool dpPatchAllocator::deallocate(void *v)
     return false;
 }
 
-dpPatchAllocator::Page* dpPatchAllocator::createPage(void *location)
+dpTrampolineAllocator::Page* dpTrampolineAllocator::createPage(void *location)
 {
     Page *p = new Page(location);
     m_pages.push_back(p);
     return p;
 }
 
-dpPatchAllocator::Page* dpPatchAllocator::findOwnerPage(void *location)
+dpTrampolineAllocator::Page* dpTrampolineAllocator::findOwnerPage(void *location)
 {
     auto p = dpFind(m_pages, [=](const Page *p){ return p->isInsideMemory(location); });
     return p==m_pages.end() ? nullptr : *p;
 }
 
-dpPatchAllocator::Page* dpPatchAllocator::findCandidatePage(void *location)
+dpTrampolineAllocator::Page* dpTrampolineAllocator::findCandidatePage(void *location)
 {
     auto p = dpFind(m_pages, [=](const Page *p){ return p->isInsideJumpRange(location); });
     return p==m_pages.end() ? nullptr : *p;
@@ -393,7 +393,8 @@ dpPatchAllocator::Page* dpPatchAllocator::findCandidatePage(void *location)
 
 
 
-class dpSymbolAllocator::Page
+template<size_t PageSize, size_t BlockSize>
+class dpBlockAllocator<PageSize, BlockSize>::Page
 {
 public:
     struct Block {
@@ -407,14 +408,14 @@ public:
     void* allocate();
     bool deallocate(void *v);
     bool isInsideMemory(void *p) const;
-    bool isInsideJumpRange(void *p) const;
 
 private:
     void *m_data;
     Block *m_freelist;
 };
 
-dpSymbolAllocator::Page::Page()
+template<size_t PageSize, size_t BlockSize>
+dpBlockAllocator<PageSize, BlockSize>::Page::Page()
     : m_data(nullptr), m_freelist(nullptr)
 {
     m_data = malloc(page_size);
@@ -426,12 +427,14 @@ dpSymbolAllocator::Page::Page()
     m_freelist[n-1].next = nullptr;
 }
 
-dpSymbolAllocator::Page::~Page()
+template<size_t PageSize, size_t BlockSize>
+dpBlockAllocator<PageSize, BlockSize>::Page::~Page()
 {
     free(m_data);
 }
 
-void* dpSymbolAllocator::Page::allocate()
+template<size_t PageSize, size_t BlockSize>
+void* dpBlockAllocator<PageSize, BlockSize>::Page::allocate()
 {
     void *ret = nullptr;
     if(m_freelist) {
@@ -441,7 +444,8 @@ void* dpSymbolAllocator::Page::allocate()
     return ret;
 }
 
-bool dpSymbolAllocator::Page::deallocate(void *v)
+template<size_t PageSize, size_t BlockSize>
+bool dpBlockAllocator<PageSize, BlockSize>::Page::deallocate(void *v)
 {
     if(v==nullptr) { return false; }
     bool ret = false;
@@ -454,7 +458,8 @@ bool dpSymbolAllocator::Page::deallocate(void *v)
     return ret;
 }
 
-bool dpSymbolAllocator::Page::isInsideMemory(void *p) const
+template<size_t PageSize, size_t BlockSize>
+bool dpBlockAllocator<PageSize, BlockSize>::Page::isInsideMemory(void *p) const
 {
     size_t loc = (size_t)p;
     size_t base = (size_t)m_data;
@@ -462,17 +467,20 @@ bool dpSymbolAllocator::Page::isInsideMemory(void *p) const
 }
 
 
-dpSymbolAllocator::dpSymbolAllocator()
+template<size_t PageSize, size_t BlockSize>
+dpBlockAllocator<PageSize, BlockSize>::dpBlockAllocator()
 {
 }
 
-dpSymbolAllocator::~dpSymbolAllocator()
+template<size_t PageSize, size_t BlockSize>
+dpBlockAllocator<PageSize, BlockSize>::~dpBlockAllocator()
 {
     dpEach(m_pages, [](Page *p){ delete p; });
     m_pages.clear();
 }
 
-void* dpSymbolAllocator::allocate()
+template<size_t PageSize, size_t BlockSize>
+void* dpBlockAllocator<PageSize, BlockSize>::allocate()
 {
     for(size_t i=0; i<m_pages.size(); ++i) {
         if(void *ret=m_pages[i]->allocate()) {
@@ -485,7 +493,8 @@ void* dpSymbolAllocator::allocate()
     return p->allocate();
 }
 
-bool dpSymbolAllocator::deallocate(void *v)
+template<size_t PageSize, size_t BlockSize>
+bool dpBlockAllocator<PageSize, BlockSize>::deallocate(void *v)
 {
     auto p = dpFind(m_pages, [=](const Page *p){ return p->isInsideMemory(v); });
     if(p!=m_pages.end()) {
@@ -494,7 +503,7 @@ bool dpSymbolAllocator::deallocate(void *v)
     }
     return false;
 }
-
+template dpBlockAllocator<1024*256, sizeof(dpSymbol)>;
 
 
 void dpSymbolTable::addSymbol(dpSymbol *v)

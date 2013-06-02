@@ -90,7 +90,7 @@ void dpPatcher::patchImpl(dpPatchData &pi)
     // 元コードの退避先
     BYTE *hook = (BYTE*)pi.hook->address;
     BYTE *target = (BYTE*)pi.target->address;
-    BYTE *unpatched = (BYTE*)m_palloc.allocate(target);
+    BYTE *unpatched = (BYTE*)m_talloc.allocate(target);
     DWORD old;
     ::VirtualProtect(target, 32, PAGE_EXECUTE_READWRITE, &old);
     HANDLE proc = ::GetCurrentProcess();
@@ -103,7 +103,7 @@ void dpPatcher::patchImpl(dpPatchData &pi)
     // (長距離 jmp は 14byte 必要なので直接書き込もうとすると容量が足りない可能性が出てくる)
     DWORD_PTR dwDistance = hook < target ? target - hook : hook - target;
     if(dwDistance > 0x7fff0000) {
-        BYTE *trampoline = (BYTE*)m_palloc.allocate(target);
+        BYTE *trampoline = (BYTE*)m_talloc.allocate(target);
         dpAddJumpInstruction(trampoline, hook);
         dpAddJumpInstruction(target, trampoline);
         ::FlushInstructionCache(proc, pi.trampoline, 32);
@@ -126,14 +126,14 @@ void dpPatcher::patchImpl(dpPatchData &pi)
     }
 }
 
-void dpPatcher::unpatchImpl(dpPatchData &pi)
+void dpPatcher::unpatchImpl(const dpPatchData &pi)
 {
     DWORD old;
     ::VirtualProtect(pi.target->address, 32, PAGE_EXECUTE_READWRITE, &old);
     dpCopyInstructions(pi.target->address, pi.unpatched, pi.unpatched_size);
     ::VirtualProtect(pi.target->address, 32, old, &old);
-    m_palloc.deallocate(pi.unpatched);
-    m_palloc.deallocate(pi.trampoline);
+    m_talloc.deallocate(pi.unpatched);
+    m_talloc.deallocate(pi.trampoline);
 
     if((dpGetConfig().log_level&dpE_LogTrivial)!=0) {
         char demangled[512];
@@ -169,12 +169,12 @@ void* dpPatcher::patch(dpSymbol *target, dpSymbol *hook)
 
     unpatchByAddress(target->address);
 
-    dpPatchData pi;
-    pi.target = target;
-    pi.hook = hook;
-    patchImpl(pi);
-    m_patches.push_back(pi);
-    return pi.unpatched;
+    dpPatchData pd;
+    pd.target = target;
+    pd.hook = hook;
+    patchImpl(pd);
+    m_patches.insert(pd);
+    return pd.unpatched;
 }
 
 
@@ -191,20 +191,18 @@ size_t dpPatcher::unpatchByBinary(dpBinary *obj)
 
 bool dpPatcher::unpatchByAddress(void *addr)
 {
-    return unpatch(findPatchByAddress(addr));
-}
-
-bool dpPatcher::unpatch(dpPatchData *pat)
-{
-    if(!pat) { return false; }
-    unpatchImpl(*pat);
-    m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], pat));
-    return true;
+    auto p = findPatchByAddressImpl(addr);
+    if(p!=m_patches.end()) {
+        unpatchImpl(*p);
+        m_patches.erase(p);
+        return true;
+    }
+    return false;
 }
 
 void dpPatcher::unpatchAll()
 {
-    eachPatchData([&](dpPatchData &p){
+    dpEach(m_patches, [&](const dpPatchData &p){
         unpatchImpl(p);
     });
     m_patches.clear();
@@ -212,16 +210,26 @@ void dpPatcher::unpatchAll()
 
 dpPatchData* dpPatcher::findPatchByName(const char *name)
 {
-    auto p = dpFind(m_patches, [=](const dpPatchData &pat){
-        return strcmp(pat.target->name, name)==0;
-    });
-    return p==m_patches.end() ? nullptr : &(*p);
+    auto p = findPatchByNameImpl(name);
+    return p==m_patches.end() ? nullptr : const_cast<dpPatchData*>(&*p);
 }
 
 dpPatchData* dpPatcher::findPatchByAddress(void *addr)
 {
-    auto p = dpFind(m_patches, [=](const dpPatchData &pat){
+    auto p = findPatchByAddressImpl(addr);
+    return p==m_patches.end() ? nullptr : const_cast<dpPatchData*>(&*p);
+}
+
+dpPatcher::patch_cont::iterator dpPatcher::findPatchByNameImpl(const char *name)
+{
+    return dpFind(m_patches, [=](const dpPatchData &pat){
+        return strcmp(pat.target->name, name)==0;
+    });
+}
+
+dpPatcher::patch_cont::iterator dpPatcher::findPatchByAddressImpl(void *addr)
+{
+    return dpFind(m_patches, [=](const dpPatchData &pat){
         return pat.target->address==addr || pat.hook->address==addr;
     });
-    return p==m_patches.end() ? nullptr : &(*p);
 }

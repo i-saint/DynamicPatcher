@@ -98,9 +98,14 @@ dpAPI bool dpPatchByAddress(void *hook_addr)
     return dpGetCurrentContext()->patchByAddress(hook_addr);
 }
 
-dpAPI void* dpGetUnpatched(void *target)
+dpAPI bool   dpUnpatchByAddress(void *target_or_hook_addr)
 {
-    return dpGetCurrentContext()->getUnpatched(target);
+    return dpGetCurrentContext()->unpatchByAddress(target_or_hook_addr);
+};
+
+dpAPI void* dpGetUnpatched(void *target_or_hook_addr)
+{
+    return dpGetCurrentContext()->getUnpatched(target_or_hook_addr);
 }
 
 
