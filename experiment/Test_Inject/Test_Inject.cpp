@@ -22,6 +22,7 @@
 dpNoInline void Test_ThisMaybeOverridden()
 {
     printf("Test_Inject.cpp: Overridden!\n");
+    dpUpdate();
 }
 
 
