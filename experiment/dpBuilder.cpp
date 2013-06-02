@@ -87,7 +87,7 @@ bool dpBuilder::startAutoBuild(const char *build_options, bool create_console)
         }
         m_watchfile_stop = false;
         m_thread_watchfile = (HANDLE)_beginthread( WatchFile, 0, this );
-        dpPrint("dp info: build thread started\n");
+        dpPrintInfo("build thread started\n");
         return true;
     }
     return false;
@@ -99,7 +99,7 @@ bool dpBuilder::stopAutoBuild()
         m_watchfile_stop = true;
         ::WaitForSingleObject(m_thread_watchfile, INFINITE);
         m_thread_watchfile = nullptr;
-        dpPrint("dp info: build thread stopped\n");
+        dpPrintInfo("build thread stopped\n");
         return true;
     }
     return false;
@@ -141,7 +141,7 @@ void dpBuilder::watchFiles()
 
 bool dpBuilder::build()
 {
-    dpPrint("dp info: build begin\n");
+    dpPrintInfo("build begin\n");
     std::string command = m_msbuild;
     command+=' ';
     command+=m_msbuild_option;
@@ -161,11 +161,11 @@ bool dpBuilder::build()
         ::Sleep(500); // 終了直後だとファイルの書き込みが終わってないことがあるっぽい？ので少し待つ…
         m_build_done = true;
         if(exit_code!=0) {
-            dpPrint("DOL error: build error.\n");
+            dpPrintError("build failed.\n");
             return false;
         }
     }
-    dpPrint("dp info: build end\n");
+    dpPrintInfo("build end\n");
     return true;
 }
 

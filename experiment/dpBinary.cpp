@@ -85,7 +85,7 @@ bool dpObjFile::loadFile(const char *path)
     void *data;
     size_t size;
     if(!dpMapFile(path, data, size, dpAllocateModule)) {
-        dpPrint("dp error: file not found %s\n", path);
+        dpPrintError("file not found %s\n", path);
         return false;
     }
     return loadMemory(path, data, size, mtime);
@@ -106,7 +106,7 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
 #else
     if( pDosHeader->e_magic!=IMAGE_FILE_MACHINE_I386 || pDosHeader->e_sp!=0 ) {
 #endif
-        dpPrint("dp fatal: %s unknown file format. it might be compiled with /GL option.\n"
+        dpPrintError("%s unknown file format. it might be compiled with /GL option.\n"
             , m_path.c_str());
         ::DebugBreak();
         return false;
@@ -210,7 +210,6 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
 bool dpObjFile::link()
 {
     bool ret = true;
-    std::string mes;
 
     size_t ImageBase = (size_t)(m_data);
     PIMAGE_FILE_HEADER pImageHeader = (PIMAGE_FILE_HEADER)ImageBase;
@@ -238,9 +237,7 @@ bool dpObjFile::link()
             const char *rname = dpGetSymbolName(StringTable, rsym);
             size_t rdata = (size_t)resolveSymbol(rname);
             if(rdata==NULL) {
-                char buf[1024];
-                _snprintf(buf, _countof(buf), "dp fatal: symbol %s referenced by %s could not be resolved.\n", rname, m_path.c_str());
-                mes += buf;
+                dpPrintError("symbol \"%s\" (referenced by \"%s\") cannot be resolved.\n", rname, m_path.c_str());
                 ret = false;
                 continue;
             }
@@ -296,18 +293,12 @@ bool dpObjFile::link()
                 break;
 #endif // _WIN64
             default:
-                dpPrint("dp warning: unknown IMAGE_RELOCATION::Type 0x%x\n", pReloc->Type);
+                dpPrintWarning("unknown IMAGE_RELOCATION::Type 0x%x\n", pReloc->Type);
                 break;
             }
         }
     }
 
-    // 安全のため VirtualProtect() で write protect をかけたいところだが、
-    // const ではない global 変数を含む可能性があるのでフルアクセス可能にしておく必要がある。
-    //::VirtualProtect((LPVOID)m_data, m_datasize, PAGE_EXECUTE_READ, &old_protect_flag);
-    if(!ret) {
-        dpPrint(mes.c_str());
-    }
     return ret;
 }
 
@@ -375,7 +366,7 @@ bool dpLibFile::loadFile(const char *path)
     void *lib_data;
     size_t lib_size;
     if(!dpMapFile(path, lib_data, lib_size, malloc)) {
-        dpPrint("dp error: file not found %s\n", path);
+        dpPrintError("file not found %s\n", path);
         return false;
     }
     bool ret = loadMemory(path, lib_data, lib_size, mtime);
@@ -394,7 +385,7 @@ bool dpLibFile::loadMemory(const char *path, void *lib_data, size_t lib_size, dp
 
     char *base = (char*)lib_data;
     if(strncmp(base, IMAGE_ARCHIVE_START, IMAGE_ARCHIVE_START_SIZE)!=0) {
-        dpPrint("do error: unknown file format %s\n", path);
+        dpPrintError("unknown file format %s\n", path);
         return false;
     }
     base += IMAGE_ARCHIVE_START_SIZE;
@@ -566,7 +557,7 @@ bool dpDllFile::loadFile(const char *path)
     void *data = nullptr;
     size_t datasize = 0;
     if(!dpMapFile(path, data, datasize, malloc)) {
-        dpPrint("dp error: file not found %s\n", path);
+        dpPrintError("file not found %s\n", path);
         return false;
     }
 
@@ -602,7 +593,7 @@ bool dpDllFile::loadFile(const char *path)
         return true;
     }
     else {
-        dpPrint("dp error: LoadLibraryA() failed. %s\n", path);
+        dpPrintError("LoadLibraryA() failed. %s\n", path);
     }
     return false;
 }

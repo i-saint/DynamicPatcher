@@ -76,6 +76,12 @@ struct dpPatchData
 template<class Container, class F> inline void dpEach(Container &cont, const F &f);
 template<class Container, class F> inline auto dpFind(Container &cont, const F &f) -> decltype(cont.begin());
 
+dpConfig& dpGetConfig();
+void    dpPrintError(const char* fmt, ...);
+void    dpPrintWarning(const char* fmt, ...);
+void    dpPrintInfo(const char* fmt, ...);
+void    dpPrintTrivial(const char* fmt, ...);
+
 void*   dpAllocateForward(size_t size, void *location);
 void*   dpAllocateBackward(size_t size, void *location);
 void*   dpAllocateModule(size_t size);
@@ -366,7 +372,8 @@ public:
     void*  patchByBinary(dpBinary *obj, const std::function<bool (const dpSymbolS&)> &condition);
     void*  patch(dpSymbol *target, dpSymbol *hook);
     size_t unpatchByBinary(dpBinary *obj);
-    bool   unpatch(void *patched);
+    bool   unpatchByAddress(void *patched);
+    bool   unpatch(dpPatchData *pat);
     void   unpatchAll();
 
     dpPatchData* findPatchByName(const char *name);

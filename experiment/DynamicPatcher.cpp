@@ -8,6 +8,9 @@
 
 static dpContext *g_dpDefaultContext = nullptr;
 static __declspec(thread) dpContext *g_dpCurrentContext = nullptr;
+static dpConfig g_dpConfig;
+
+dpConfig& dpGetConfig() { return g_dpConfig; }
 
 dpAPI dpContext* dpCreateContext()
 {
@@ -36,11 +39,11 @@ dpAPI dpContext* dpGetCurrentContext()
 }
 
 
-dpAPI bool dpInitialize()
+dpAPI bool dpInitialize(const dpConfig &conf)
 {
-    ::SymInitialize(::GetCurrentProcess(), NULL, TRUE);
-    ::SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
     if(!g_dpDefaultContext) {
+        ::SymInitialize(::GetCurrentProcess(), NULL, TRUE);
+        ::SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
         g_dpDefaultContext = new dpContext();
         return true;
     }

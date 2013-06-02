@@ -119,10 +119,10 @@ void dpPatcher::patchImpl(dpPatchData &pi)
     pi.unpatched = unpatched;
     pi.unpatched_size = stab_size;
 
-    {
-        char demangled[1024];
+    if((dpGetConfig().log_level&dpE_LogTrivial)!=0) { // たぶん demangle はそこそこでかい処理なので early out
+        char demangled[512];
         dpDemangle(pi.target->name, demangled, sizeof(demangled));
-        dpPrint("dp info: patched 0x%p -> 0x%p (\"%s\" : \"%s\")\n", pi.target->address, pi.hook->address, demangled, pi.target->name);
+        dpPrintTrivial("patch 0x%p -> 0x%p (\"%s\" : \"%s\")\n", pi.target->address, pi.hook->address, demangled, pi.target->name);
     }
 }
 
@@ -135,10 +135,10 @@ void dpPatcher::unpatchImpl(dpPatchData &pi)
     m_palloc.deallocate(pi.unpatched);
     m_palloc.deallocate(pi.trampoline);
 
-    {
-        char demangled[1024];
+    if((dpGetConfig().log_level&dpE_LogTrivial)!=0) {
+        char demangled[512];
         dpDemangle(pi.target->name, demangled, sizeof(demangled));
-        dpPrint("dp info: unpatched 0x%p (\"%s\" : \"%s\")\n", pi.target->address, demangled, pi.target->name);
+        dpPrintTrivial("unpatch 0x%p (\"%s\" : \"%s\")\n", pi.target->address, demangled, pi.target->name);
     }
 }
 
@@ -167,7 +167,7 @@ void* dpPatcher::patch(dpSymbol *target, dpSymbol *hook)
 {
     if(!target || !hook) { return nullptr; }
 
-    unpatch(target->address);
+    unpatchByAddress(target->address);
 
     dpPatchData pi;
     pi.target = target;
@@ -182,23 +182,24 @@ size_t dpPatcher::unpatchByBinary(dpBinary *obj)
 {
     size_t n = 0;
     obj->eachSymbols([&](dpSymbol *sym){
-        if(dpPatchData *p = findPatchByAddress(sym->address)) {
-            unpatchImpl(*p);
-            m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
+        if(dpIsFunction(sym->flags) && unpatchByAddress(sym->address)) {
             ++n;
         }
     });
     return n;
 }
 
-bool dpPatcher::unpatch(void *addr)
+bool dpPatcher::unpatchByAddress(void *addr)
 {
-    if(dpPatchData *p = findPatchByAddress(addr)) {
-        unpatchImpl(*p);
-        m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], p));
-        return true;
-    }
-    return false;
+    return unpatch(findPatchByAddress(addr));
+}
+
+bool dpPatcher::unpatch(dpPatchData *pat)
+{
+    if(!pat) { return false; }
+    unpatchImpl(*pat);
+    m_patches.erase(m_patches.begin()+std::distance(&m_patches[0], pat));
+    return true;
 }
 
 void dpPatcher::unpatchAll()

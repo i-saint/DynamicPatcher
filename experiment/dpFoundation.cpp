@@ -27,6 +27,47 @@ dpAPI void dpPrint(const char* fmt, ...)
     va_end(vl);
 }
 
+void dpPrintError(const char* fmt, ...)
+{
+    if((dpGetConfig().log_level&dpE_LogError)==0) { return; }
+    std::string format = std::string("dp error: ")+fmt; // OutputDebugStringA() は超遅いので dpPrint() 2 回呼ぶよりこうした方がまだ速い
+    va_list vl;
+    va_start(vl, fmt);
+    dpPrintV(format.c_str(), vl);
+    va_end(vl);
+}
+
+void dpPrintWarning(const char* fmt, ...)
+{
+    if((dpGetConfig().log_level&dpE_LogWarning)==0) { return; }
+    std::string format = std::string("dp warning: ")+fmt;
+    va_list vl;
+    va_start(vl, fmt);
+    dpPrintV(format.c_str(), vl);
+    va_end(vl);
+}
+
+void dpPrintInfo(const char* fmt, ...)
+{
+    if((dpGetConfig().log_level&dpE_LogInfo)==0) { return; }
+    std::string format = std::string("dp info: ")+fmt;
+    va_list vl;
+    va_start(vl, fmt);
+    dpPrintV(format.c_str(), vl);
+    va_end(vl);
+}
+
+void dpPrintTrivial(const char* fmt, ...)
+{
+    if((dpGetConfig().log_level&dpE_LogTrivial)==0) { return; }
+    std::string format = std::string("dp trivial: ")+fmt;
+    va_list vl;
+    va_start(vl, fmt);
+    dpPrintV(format.c_str(), vl);
+    va_end(vl);
+}
+
+
 
 // 位置指定版 VirtualAlloc()
 // location より大きいアドレスの最寄りの位置にメモリを確保する。

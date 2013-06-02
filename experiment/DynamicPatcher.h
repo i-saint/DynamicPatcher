@@ -50,6 +50,17 @@
 #define dpOnLoad(...)   dpCLinkage static void dpOnLoadHandler()  { __VA_ARGS__ } __declspec(selectany) void *_dpOnLoadHandler  =dpOnLoadHandler;
 #define dpOnUnload(...) dpCLinkage static void dpOnUnloadHandler(){ __VA_ARGS__ } __declspec(selectany) void *_dpOnUnloadHandler=dpOnUnloadHandler;
 
+enum dpLogLevel {
+    dpE_LogError   = 0x1,
+    dpE_LogWarning = 0x2,
+    dpE_LogInfo    = 0x4,
+    dpE_LogTrivial = 0x8,
+
+    dpE_LogAll      = dpE_LogError|dpE_LogWarning|dpE_LogInfo|dpE_LogTrivial,
+    dpE_LogSimple   = dpE_LogError|dpE_LogWarning|dpE_LogInfo,
+    dpE_LogNone     = 0,
+};
+
 enum dpSymbolFlags {
     dpE_Code    = 0x1,  // code
     dpE_IData   = 0x2,  // initialized data
@@ -71,9 +82,18 @@ struct dpSymbolS
     int flags;
 };
 
+struct dpConfig
+{
+    int log_level;
+
+    dpConfig(int log=dpE_LogAll) : log_level(log)
+    {
+    }
+};
+
 class dpContext;
 
-dpAPI bool   dpInitialize();
+dpAPI bool   dpInitialize(const dpConfig &conf=dpConfig());
 dpAPI bool   dpFinalize();
 
 dpAPI dpContext* dpGetDefaultContext();
@@ -82,10 +102,10 @@ dpAPI void       dpDeleteContext(dpContext *ctx);
 dpAPI void       dpSetCurrentContext(dpContext *ctx); // current context is thread local
 dpAPI dpContext* dpGetCurrentContext(); // default is dpGetDefaultContext()
 
-dpAPI size_t dpLoad(const char *path); // path to .obj .lib .dll .exe. accept wildcard. (ex: x64/Debug/*.obj)
-dpAPI bool   dpLoadObj(const char *path); // load as obj regardless file extension
-dpAPI bool   dpLoadLib(const char *path); // load as lib regardless file extension
-dpAPI bool   dpLoadDll(const char *path); // load as dll regardless file extension
+dpAPI size_t dpLoad(const char *path); // path to .obj .lib .dll .exe. accept wildcard (ex: x64/Debug/*.obj)
+dpAPI bool   dpLoadObj(const char *path); // load as .obj regardless file extension
+dpAPI bool   dpLoadLib(const char *path); // load as .lib regardless file extension
+dpAPI bool   dpLoadDll(const char *path); // load as .dll regardless file extension
 dpAPI bool   dpUnload(const char *path);
 dpAPI bool   dpLink(); // must be called after dpLoad*()s & dpUnload()s. onload handler is called in this.
 
