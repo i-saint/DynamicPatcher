@@ -6,6 +6,27 @@
 #include <string>
 #include <vector>
 
+inline size_t GetModulePath(char *out_path, size_t len)
+{
+    HMODULE mod = 0;
+    ::GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCSTR)&GetModulePath, &mod);
+    DWORD size = ::GetModuleFileNameA(mod, out_path, len);
+    return size;
+}
+
+inline bool GetModuleDirectory(char *out_path, size_t len)
+{
+    size_t size = ::GetModulePath(out_path, len);
+    while(size>0) {
+        if(out_path[size]=='\\') {
+            out_path[size+1] = '\0';
+            return true;
+        }
+        --size;
+    }
+    return false;
+}
+
 struct Options
 {
     std::string target_process;
@@ -13,12 +34,18 @@ struct Options
 
     Options()
     {
-        const char *conf = "DynamicPatcherInjector.txt";
-        if(__argc>2) { conf=__argv[1] ;}
+        std::string config_path;
+        {
+            char module_path[MAX_PATH];
+            GetModuleDirectory(module_path, _countof(module_path));
+            config_path += module_path;
+            if(__argc>2) { config_path += __argv[1] ;}
+            else         { config_path += "DynamicPatcherInjector.txt";}
+        }
 
         char line[1024];
-        char opt[1024];
-        if(FILE *f=fopen(conf, "rb")) {
+        char opt[MAX_PATH];
+        if(FILE *f=fopen(config_path.c_str(), "rb")) {
             while(fgets(line, _countof(line), f)) {
                 if     (sscanf(line, "target_process: \"%[^\"]\"", opt)) { target_process=opt; }
                 else if(sscanf(line, "load_module: \"%[^\"]\"", opt))    { load_module.push_back(opt); }
