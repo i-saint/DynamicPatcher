@@ -19,10 +19,10 @@
 #define dpObjDir "_tmp/Test_Inject_" dpPlatform dpConfiguration 
 
 
-//dpNoInline bool GetEndFlag()
-//{
-//    return true;
-//}
+dpNoInline bool GetEndFlag()
+{
+    return false;
+}
 
 dpNoInline void Test_ThisMaybeOverridden()
 {

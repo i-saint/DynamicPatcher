@@ -57,15 +57,19 @@ dpBuilder::~dpBuilder()
 
 void dpBuilder::addLoadPath(const char *path)
 {
-    m_loadpathes.push_back(path);
+    std::string tmp = path;
+    auto p = dpFind(m_loadpathes, [&](const std::string &s){return s==tmp;});
+    if(p==m_loadpathes.end()) { m_loadpathes.push_back(tmp); }
 }
 
 void dpBuilder::addSourcePath(const char *path)
 {
     char fullpath[MAX_PATH];
     ::GetFullPathNameA(path, MAX_PATH, fullpath, nullptr);
-    SourcePath sd = {fullpath, NULL};
-    m_srcpathes.push_back(sd);
+
+    SourcePath tmp = {fullpath, NULL};
+    auto p = dpFind(m_srcpathes, [&](const SourcePath &s){return s.path==tmp.path;});
+    if(p==m_srcpathes.end()) { m_srcpathes.push_back(tmp); }
 }
 
 static void WatchFile( LPVOID arg )
