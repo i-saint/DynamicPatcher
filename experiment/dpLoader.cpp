@@ -5,7 +5,9 @@
 #include "DynamicPatcher.h"
 #include "dpInternal.h"
 
-void dpCallOnLoadHandler(dpBinary *v);
+
+static const int g_host_symbol_flags = dpE_Code|dpE_Read|dpE_Execute|dpE_HostSymbol|dpE_NameNeedsDelete;
+
 
 dpSymbol* dpLoader::findHostSymbolByName(const char *name)
 {
@@ -22,7 +24,7 @@ dpSymbol* dpLoader::findHostSymbolByName(const char *name)
     }
     char *namebuf = new char[sinfo->NameLen+1];
     strncpy(namebuf, sinfo->Name, sinfo->NameLen+1);
-    m_hostsymbols.addSymbol(newSymbol(namebuf, (void*)sinfo->Address, 0, 0, nullptr));
+    m_hostsymbols.addSymbol(newSymbol(namebuf, (void*)sinfo->Address, g_host_symbol_flags, 0, nullptr));
     m_hostsymbols.sort();
     return m_hostsymbols.findSymbolByName(name);
 }
@@ -42,7 +44,7 @@ dpSymbol* dpLoader::findHostSymbolByAddress(void *addr)
     }
     char *namebuf = new char[sinfo->NameLen+1];
     strncpy(namebuf, sinfo->Name, sinfo->NameLen+1);
-    m_hostsymbols.addSymbol(newSymbol(namebuf, (void*)sinfo->Address, 0, 0, nullptr));
+    m_hostsymbols.addSymbol(newSymbol(namebuf, (void*)sinfo->Address, g_host_symbol_flags, 0, nullptr));
     m_hostsymbols.sort();
     return m_hostsymbols.findSymbolByAddress(addr);
 }
@@ -56,10 +58,8 @@ dpLoader::dpLoader(dpContext *ctx)
 dpLoader::~dpLoader()
 {
     while(!m_binaries.empty()) { unloadImpl(m_binaries.front()); }
-    m_hostsymbols.eachSymbols([&](dpSymbol *sym){
-        delete[] sym->name;
-        deleteSymbol(sym);
-    });
+    m_hostsymbols.eachSymbols([&](dpSymbol *sym){ deleteSymbol(sym); });
+    m_hostsymbols.clear();
 }
 
 void dpLoader::unloadImpl( dpBinary *bin )
@@ -147,15 +147,18 @@ bool dpLoader::link()
         ::DebugBreak();
     }
 
-    // 新規ロードされているオブジェクトに OnLoad があれば呼ぶ & dpPatch つき symbol を patch する
-    dpEach(m_onload_queue, [&](dpBinary *b){
-        b->eachSymbols([&](dpSymbol *sym){
-            if(dpIsExportFunction(sym->flags)) {
-                dpGetPatcher()->patch(findHostSymbolByName(sym->name), sym);
-            }
+    // 有効にされていれば dllexport な関数を自動的に patch
+    if((dpGetConfig().sysflags&dpE_AutoPatchExportFunctions)!=0) {
+        dpEach(m_onload_queue, [&](dpBinary *b){
+            b->eachSymbols([&](dpSymbol *sym){
+                if(dpIsExportFunction(sym->flags)) {
+                    dpGetPatcher()->patch(findHostSymbolByName(sym->name), sym);
+                }
+            });
         });
-        b->callHandler(dpE_OnLoad);
-    });
+    }
+    // OnLoad があれば呼ぶ
+    dpEach(m_onload_queue, [&](dpBinary *b){ b->callHandler(dpE_OnLoad); });
     m_onload_queue.clear();
 
     return ret;
@@ -226,5 +229,6 @@ dpSymbol* dpLoader::newSymbol(const char *nam, void *addr, int fla, int sect, dp
 
 void dpLoader::deleteSymbol(dpSymbol *sym)
 {
+    sym->~dpSymbol();
     m_symalloc.deallocate(sym);
 }

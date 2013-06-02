@@ -231,6 +231,18 @@ size_t dpSeparateFileExt(const char *filename, std::string *file, std::string *e
 }
 
 
+
+dpSymbol::dpSymbol(const char *nam, void *addr, int fla, int sect, dpBinary *bin)
+    : name(nam), address(addr), flags(fla), section(sect), binary(bin)
+{}
+dpSymbol::~dpSymbol()
+{
+    if((flags&dpE_NameNeedsDelete)!=0) {
+        delete[] name;
+    }
+}
+
+
 dpSectionAllocator::dpSectionAllocator(void *data, size_t size)
     : m_data(data), m_size(size), m_used(0)
 {}
@@ -523,9 +535,10 @@ dpSymbol* dpSymbolTable::getSymbol(size_t i)
 
 dpSymbol* dpSymbolTable::findSymbolByName(const char *name)
 {
-    dpSymbol tmp(name, nullptr, 0, 0, nullptr);
-    auto p = std::lower_bound(m_symbols.begin(), m_symbols.end(), &tmp, dpLTPtr<dpSymbol>());
-    if(p!=m_symbols.end() && **p==tmp) {
+    auto p = std::lower_bound(m_symbols.begin(), m_symbols.end(), name,
+        [](const dpSymbol *sym, const char *name){ return *sym<name; }
+    );
+    if(p!=m_symbols.end() && **p==name) {
         return *p;
     }
     return nullptr;

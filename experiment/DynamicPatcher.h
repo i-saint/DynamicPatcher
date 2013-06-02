@@ -50,17 +50,6 @@
 #define dpOnLoad(...)   dpCLinkage static void dpOnLoadHandler()  { __VA_ARGS__ } __declspec(selectany) void *_dpOnLoadHandler  =dpOnLoadHandler;
 #define dpOnUnload(...) dpCLinkage static void dpOnUnloadHandler(){ __VA_ARGS__ } __declspec(selectany) void *_dpOnUnloadHandler=dpOnUnloadHandler;
 
-enum dpLogLevel {
-    dpE_LogError   = 0x1,
-    dpE_LogWarning = 0x2,
-    dpE_LogInfo    = 0x4,
-    dpE_LogTrivial = 0x8,
-
-    dpE_LogAll      = dpE_LogError|dpE_LogWarning|dpE_LogInfo|dpE_LogTrivial,
-    dpE_LogSimple   = dpE_LogError|dpE_LogWarning|dpE_LogInfo,
-    dpE_LogNone     = 0,
-};
-
 enum dpSymbolFlags {
     dpE_Code    = 0x1,  // code
     dpE_IData   = 0x2,  // initialized data
@@ -82,13 +71,30 @@ struct dpSymbolS
     int flags;
 };
 
+
+enum dpLogLevel {
+    dpE_LogError   = 0x1,
+    dpE_LogWarning = 0x2,
+    dpE_LogInfo    = 0x4,
+    dpE_LogTrivial = 0x8,
+
+    dpE_LogAll      = dpE_LogError|dpE_LogWarning|dpE_LogInfo|dpE_LogTrivial,
+    dpE_LogSimple   = dpE_LogError|dpE_LogWarning|dpE_LogInfo,
+    dpE_LogNone     = 0,
+};
+enum dpSystemFlags {
+    dpE_AutoPatchExportFunctions = 0x1, // patch exported (dllexport==dpPatch) functions automatically when the module is loaded
+
+    dpE_SysDefault = dpE_AutoPatchExportFunctions,
+};
+
 struct dpConfig
 {
-    int log_level;
+    int log_level; // combination of dpLogLevel
+    int sysflags; // combination of dpSystemFlags
 
-    dpConfig(int log=dpE_LogAll) : log_level(log)
-    {
-    }
+    dpConfig(int log=dpE_LogAll, int f=dpE_SysDefault) : log_level(log), sysflags(f)
+    {}
 };
 
 class dpContext;

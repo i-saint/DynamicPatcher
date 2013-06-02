@@ -34,6 +34,10 @@ enum dpLinkFlags {
     dpE_NeedsLink=1,
     dpE_NeedsBase=2,
 };
+enum dpSymbolFlagsEx {
+    dpE_HostSymbol      = 0x10000,
+    dpE_NameNeedsDelete = 0x20000,
+};
 
 struct dpSymbol
 {
@@ -43,13 +47,14 @@ struct dpSymbol
     int section;
     dpBinary *binary;
 
-    dpSymbol(const char *nam, void *addr, int fla, int sect, dpBinary *bin)
-        : name(nam), address(addr), flags(fla), section(sect), binary(bin)
-    {}
+    dpSymbol(const char *nam, void *addr, int fla, int sect, dpBinary *bin);
+    ~dpSymbol();
     const dpSymbolS& simplify() const { return (const dpSymbolS&)*this; }
 };
 inline bool operator< (const dpSymbol &a, const dpSymbol &b) { return strcmp(a.name, b.name)<0; }
 inline bool operator==(const dpSymbol &a, const dpSymbol &b) { return strcmp(a.name, b.name)==0; }
+inline bool operator< (const dpSymbol &a, const char *b) { return strcmp(a.name, b)<0; }
+inline bool operator==(const dpSymbol &a, const char *b) { return strcmp(a.name, b)==0; }
 
 template<class T>
 struct dpLTPtr {
