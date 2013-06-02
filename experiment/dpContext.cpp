@@ -63,37 +63,37 @@ size_t dpContext::patchByFile(const char *filename, const std::function<bool (co
 
 bool dpContext::patchNameToName(const char *target_name, const char *hook_name)
 {
-    if(dpSymbol *target=m_loader->findHostSymbolByName(target_name)) {
-        if(dpSymbol *hook=m_loader->findAndLinkSymbolByName(hook_name)) {
-            return m_patcher->patch(target, hook)!=nullptr;
-        }
+    dpSymbol *target = m_loader->findHostSymbolByName(target_name);
+    dpSymbol *hook   = m_loader->findSymbolByName(hook_name);
+    if(target && hook) {
+        return m_patcher->patch(target, hook)!=nullptr;
     }
     return false;
 }
 
 bool dpContext::patchAddressToName(const char *target_name, void *hook_addr)
 {
-    if(dpSymbol *target=m_loader->findHostSymbolByName(target_name)) {
-        if(dpSymbol *hook=m_loader->findAndLinkSymbolByAddress(hook_addr)) {
+    dpSymbol *target = m_loader->findHostSymbolByName(target_name);
+    dpSymbol *hook   = m_loader->findSymbolByAddress(hook_addr);
+    if(target && hook) {
             return m_patcher->patch(target, hook)!=nullptr;
-        }
     }
     return false;
 }
 
 bool dpContext::patchAddressToAddress(void *target_addr, void *hook_addr)
 {
-    if(dpSymbol *target=m_loader->findHostSymbolByAddress(target_addr)) {
-        if(dpSymbol *hook=m_loader->findAndLinkSymbolByAddress(hook_addr)) {
-            return m_patcher->patch(target, hook)!=nullptr;
-        }
+    dpSymbol *target = m_loader->findHostSymbolByAddress(target_addr);
+    dpSymbol *hook   = m_loader->findSymbolByAddress(hook_addr);
+    if(target && hook) {
+        return m_patcher->patch(target, hook)!=nullptr;
     }
     return false;
 }
 
 bool dpContext::patchByAddress(void *hook_addr)
 {
-    if(dpSymbol *hook=m_loader->findAndLinkSymbolByAddress(hook_addr)) {
+    if(dpSymbol *hook=m_loader->findSymbolByAddress(hook_addr)) {
         if(dpSymbol *target=m_loader->findHostSymbolByName(hook->name)) {
             return m_patcher->patch(target, hook)!=nullptr;
         }

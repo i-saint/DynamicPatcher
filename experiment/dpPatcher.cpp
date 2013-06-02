@@ -119,10 +119,10 @@ void dpPatcher::patchImpl(dpPatchData &pi)
     pi.unpatched = unpatched;
     pi.unpatched_size = stab_size;
 
-    if((dpGetConfig().log_level&dpE_LogTrivial)!=0) { // たぶん demangle はそこそこでかい処理なので early out
+    if((dpGetConfig().log_level&dpE_LogDetail)!=0) { // たぶん demangle はそこそこでかい処理なので early out
         char demangled[512];
         dpDemangle(pi.target->name, demangled, sizeof(demangled));
-        dpPrintTrivial("patch 0x%p -> 0x%p (\"%s\" : \"%s\")\n", pi.target->address, pi.hook->address, demangled, pi.target->name);
+        dpPrintDetail("patch 0x%p -> 0x%p (\"%s\" : \"%s\")\n", pi.target->address, pi.hook->address, demangled, pi.target->name);
     }
 }
 
@@ -135,10 +135,10 @@ void dpPatcher::unpatchImpl(const dpPatchData &pi)
     m_talloc.deallocate(pi.unpatched);
     m_talloc.deallocate(pi.trampoline);
 
-    if((dpGetConfig().log_level&dpE_LogTrivial)!=0) {
+    if((dpGetConfig().log_level&dpE_LogDetail)!=0) {
         char demangled[512];
         dpDemangle(pi.target->name, demangled, sizeof(demangled));
-        dpPrintTrivial("unpatch 0x%p (\"%s\" : \"%s\")\n", pi.target->address, demangled, pi.target->name);
+        dpPrintDetail("unpatch 0x%p (\"%s\" : \"%s\")\n", pi.target->address, demangled, pi.target->name);
     }
 }
 
@@ -157,6 +157,7 @@ void* dpPatcher::patchByBinary(dpBinary *obj, const std::function<bool (const dp
 {
     obj->eachSymbols([&](dpSymbol *sym){
         if(dpIsFunction(sym->flags) && condition(sym->simplify())) {
+            sym->partialLink();
             patch(dpGetLoader()->findHostSymbolByName(sym->name), sym);
         }
     });

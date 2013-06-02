@@ -140,19 +140,22 @@ bool dpLoader::link()
         if(!bin->link()) { ret=false; }
     });
 
-    if(ret) {
-        dpPrintInfo("link completed\n");
-    }
-    else {
-        dpPrintError("link error\n");
-        ::DebugBreak();
+    if((dpGetConfig().sysflags&dpE_DelayedLink)==0) {
+        if(ret) {
+            dpPrintInfo("link succeeded\n");
+        }
+        else {
+            dpPrintError("link error\n");
+            ::DebugBreak();
+        }
     }
 
     // 有効にされていれば dllexport な関数を自動的に patch
-    if((dpGetConfig().sysflags&dpE_AutoPatchExportFunctions)!=0) {
+    if((dpGetConfig().sysflags&dpE_AutoPatchExports)!=0) {
         dpEach(m_onload_queue, [&](dpBinary *b){
             b->eachSymbols([&](dpSymbol *sym){
                 if(dpIsExportFunction(sym->flags)) {
+                    sym->partialLink();
                     dpGetPatcher()->patch(findHostSymbolByName(sym->name), sym);
                 }
             });
@@ -183,24 +186,6 @@ dpSymbol* dpLoader::findSymbolByAddress(void *addr)
         if(dpSymbol *s = m_binaries[i]->getSymbolTable().findSymbolByAddress(addr)) {
             return s;
         }
-    }
-    return nullptr;
-}
-
-dpSymbol* dpLoader::findAndLinkSymbolByName(const char *name)
-{
-    if(dpSymbol *sym=findSymbolByName(name)) {
-        // todo: partial link
-        return sym;
-    }
-    return nullptr;
-}
-
-dpSymbol* dpLoader::findAndLinkSymbolByAddress(void *addr)
-{
-    if(dpSymbol *sym=findSymbolByAddress(addr)) {
-        // todo: partial link
-        return sym;
     }
     return nullptr;
 }

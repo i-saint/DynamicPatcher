@@ -57,10 +57,10 @@ void dpPrintInfo(const char* fmt, ...)
     va_end(vl);
 }
 
-void dpPrintTrivial(const char* fmt, ...)
+void dpPrintDetail(const char* fmt, ...)
 {
-    if((dpGetConfig().log_level&dpE_LogTrivial)==0) { return; }
-    std::string format = std::string("dp trivial: ")+fmt;
+    if((dpGetConfig().log_level&dpE_LogDetail)==0) { return; }
+    std::string format = std::string("dp detail: ")+fmt;
     va_list vl;
     va_start(vl, fmt);
     dpPrintV(format.c_str(), vl);
@@ -241,6 +241,8 @@ dpSymbol::~dpSymbol()
         delete[] name;
     }
 }
+const dpSymbolS& dpSymbol::simplify() const { return (const dpSymbolS&)*this; }
+bool dpSymbol::partialLink() { return binary->partialLink(section); }
 
 
 dpSectionAllocator::dpSectionAllocator(void *data, size_t size)
@@ -506,6 +508,10 @@ bool dpBlockAllocator<PageSize, BlockSize>::deallocate(void *v)
 template dpBlockAllocator<1024*256, sizeof(dpSymbol)>;
 
 
+dpSymbolTable::dpSymbolTable() : m_partial_link(false)
+{
+}
+
 void dpSymbolTable::addSymbol(dpSymbol *v)
 {
     m_symbols.push_back(v);
@@ -532,6 +538,11 @@ void dpSymbolTable::clear()
     m_symbols.clear();
 }
 
+void dpSymbolTable::enablePartialLink(bool v)
+{
+    m_partial_link = v;
+}
+
 size_t dpSymbolTable::getNumSymbols() const
 {
     return m_symbols.size();
@@ -539,7 +550,8 @@ size_t dpSymbolTable::getNumSymbols() const
 
 dpSymbol* dpSymbolTable::getSymbol(size_t i)
 {
-    return m_symbols[i];
+    dpSymbol *sym = m_symbols[i];
+    return sym;
 }
 
 dpSymbol* dpSymbolTable::findSymbolByName(const char *name)
@@ -548,7 +560,9 @@ dpSymbol* dpSymbolTable::findSymbolByName(const char *name)
         [](const dpSymbol *sym, const char *name){ return *sym<name; }
     );
     if(p!=m_symbols.end() && **p==name) {
-        return *p;
+        dpSymbol *sym = *p;
+        if(m_partial_link) { sym->partialLink(); }
+        return sym;
     }
     return nullptr;
 }
@@ -556,20 +570,10 @@ dpSymbol* dpSymbolTable::findSymbolByName(const char *name)
 dpSymbol* dpSymbolTable::findSymbolByAddress( void *addr )
 {
     auto p = dpFind(m_symbols, [=](const dpSymbol *sym){ return sym->address==addr; });
-    return p==m_symbols.end() ? nullptr : *p;
-}
-
-const dpSymbol* dpSymbolTable::getSymbol(size_t i) const
-{
-    return const_cast<dpSymbolTable*>(this)->getSymbol(i);
-}
-
-const dpSymbol* dpSymbolTable::findSymbolByName(const char *name) const
-{
-    return const_cast<dpSymbolTable*>(this)->findSymbolByName(name);
-}
-
-const dpSymbol* dpSymbolTable::findSymbolByAddress( void *sym ) const
-{
-    return const_cast<dpSymbolTable*>(this)->findSymbolByAddress(sym);
+    if(p!=m_symbols.end()) {
+        dpSymbol *sym = *p;
+        if(m_partial_link) { sym->partialLink(); }
+        return sym;
+    }
+    return nullptr;
 }

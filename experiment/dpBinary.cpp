@@ -44,7 +44,7 @@ dpObjFile::dpObjFile(dpContext *ctx)
     , m_data(nullptr), m_size(0)
     , m_aligned_data(nullptr), m_aligned_datasize(0)
     , m_path(), m_mtime(0)
-    , m_reloc_bases(), m_symbols()
+    , m_symbols()
 {
 }
 
@@ -118,6 +118,8 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
     DWORD SymbolCount = pImageHeader->NumberOfSymbols;
     PSTR StringTable = (PSTR)&pSymbolTable[SymbolCount];
 
+    m_linkdata.resize(pImageHeader->NumberOfSections);
+
     // アラインが必要な section をアラインしつつ新しい領域に移す
     m_aligned_data = NULL;
     m_aligned_datasize = 0xffffffff;
@@ -155,6 +157,7 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
         //const char *name = GetSymbolName(StringTable, sym);
         if(sym->SectionNumber>0) {
             IMAGE_SECTION_HEADER &sect = pSectionHeader[sym->SectionNumber-1];
+            m_relocdata.resize(m_relocdata.size()+sect.NumberOfRelocations);
             void *data = (void*)(ImageBase + (int)sect.PointerToRawData + sym->Value);
             if(sym->SectionNumber==IMAGE_SYM_UNDEFINED) { continue; }
             const char *name = dpGetSymbolName(StringTable, sym);
@@ -167,7 +170,7 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
                 if((sect.Characteristics&IMAGE_SCN_MEM_WRITE))   { flags|=dpE_Write; }
                 if((sect.Characteristics&IMAGE_SCN_MEM_EXECUTE)) { flags|=dpE_Execute; }
                 if((sect.Characteristics&IMAGE_SCN_MEM_SHARED))  { flags|=dpE_Shared; }
-                m_symbols.addSymbol(dpGetLoader()->newSymbol(name, data, flags, sym->SectionNumber, this));
+                m_symbols.addSymbol(dpGetLoader()->newSymbol(name, data, flags, sym->SectionNumber-1, this));
             }
         }
         i += pSymbolTable[i].NumberOfAuxSymbols;
@@ -209,6 +212,29 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
 // 外部シンボルのリンケージ解決
 bool dpObjFile::link()
 {
+    size_t num_sections = m_linkdata.size();
+    for(size_t si=0; si<num_sections; ++si) {
+        m_linkdata[si].flags |= dpE_NeedsLink;
+    }
+    if((dpGetConfig().sysflags&dpE_DelayedLink)==0) {
+        for(size_t si=0; si<num_sections; ++si) {
+            if(!partialLink(si)) {
+                return false;
+            }
+        }
+    }
+    else {
+        m_symbols.enablePartialLink(true);
+    }
+    return true;
+}
+
+bool dpObjFile::partialLink(size_t si)
+{
+    LinkData &ld = m_linkdata[si];
+    if((ld.flags & dpE_NeedsLink)==0) { return true; }
+    ld.flags &= ~dpE_NeedsLink;
+
     bool ret = true;
 
     size_t ImageBase = (size_t)(m_data);
@@ -218,9 +244,10 @@ bool dpObjFile::link()
     DWORD SymbolCount = pImageHeader->NumberOfSymbols;
     PSTR StringTable = (PSTR)(pSymbolTable+SymbolCount);
 
-    for(size_t si=0; si<pImageHeader->NumberOfSections; ++si) {
+    if(si < pImageHeader->NumberOfSections) {
         IMAGE_SECTION_HEADER &sect = pSectionHeader[si];
         size_t SectionBase = (size_t)(ImageBase + (int)sect.PointerToRawData);
+        dpPrintDetail("partial link %s SECT%X, \"%s\"\n", getPath(), si, sect.Name);
 
         DWORD NumRelocations = sect.NumberOfRelocations;
         DWORD FirstRelocation = 0;
@@ -232,6 +259,7 @@ bool dpObjFile::link()
 
         PIMAGE_RELOCATION pRelocation = (PIMAGE_RELOCATION)(ImageBase + (int)sect.PointerToRelocations);
         for(size_t ri=FirstRelocation; ri<NumRelocations; ++ri) {
+            RelocationData &reloc = m_relocdata[ri];
             PIMAGE_RELOCATION pReloc = pRelocation + ri;
             PIMAGE_SYMBOL rsym = pSymbolTable + pReloc->SymbolTableIndex;
             const char *rname = dpGetSymbolName(StringTable, rsym);
@@ -259,10 +287,9 @@ bool dpObjFile::link()
 #endif
             };
             size_t addr = SectionBase + pReloc->VirtualAddress;
-            // 更新先に相対アドレスが入ってることがある。リンクだけ再度行われることがあるため、単純に加算するわけにはいかない。
-            // 面倒だが std::map を使う。初参照のアドレスであればここで相対アドレスが記憶される。
-            if(m_reloc_bases.find(addr)==m_reloc_bases.end()) {
-                m_reloc_bases[addr] = *(DWORD*)(addr);
+            if(ld.flags & dpE_NeedsBase) {
+                reloc.base = *(DWORD*)(addr);
+                ld.flags &= ~dpE_NeedsBase;
             }
 
             // IMAGE_RELOCATION::Type に応じて再配置
@@ -272,12 +299,12 @@ bool dpObjFile::link()
             case IMAGE_REL32:
                 {
                     DWORD rel = (DWORD)(rdata - SectionBase - pReloc->VirtualAddress - 4);
-                    *(DWORD*)(addr) = (DWORD)(m_reloc_bases[addr] + rel);
+                    *(DWORD*)(addr) = (DWORD)(reloc.base + rel);
                 }
                 break;
             case IMAGE_DIR32:
                 {
-                    *(DWORD*)(addr) = (DWORD)(m_reloc_bases[addr] + rdata);
+                    *(DWORD*)(addr) = (DWORD)(reloc.base + rdata);
                 }
                 break;
             case IMAGE_DIR32NB:
@@ -288,7 +315,7 @@ bool dpObjFile::link()
 #ifdef _WIN64
             case IMAGE_DIR64:
                 {
-                    *(QWORD*)(addr) = (QWORD)(m_reloc_bases[addr] + rdata);
+                    *(QWORD*)(addr) = (QWORD)(reloc.base + rdata);
                 }
                 break;
 #endif // _WIN64
@@ -299,8 +326,12 @@ bool dpObjFile::link()
         }
     }
 
+    if(!ret) {
+        ld.flags |= dpE_NeedsLink;
+    }
     return ret;
 }
+
 
 bool dpObjFile::callHandler( dpEventType e )
 {
@@ -470,6 +501,11 @@ bool dpLibFile::link()
     return ret;
 }
 
+bool dpLibFile::partialLink(size_t section)
+{
+    return true;
+}
+
 bool dpLibFile::callHandler( dpEventType e )
 {
     return false;
@@ -614,10 +650,8 @@ bool dpDllFile::loadMemory(const char *path, void *data, size_t /*datasize*/, dp
     return true;
 }
 
-bool dpDllFile::link()
-{
-    return m_module!=nullptr;
-}
+bool dpDllFile::link() { return m_module!=nullptr; }
+bool dpDllFile::partialLink(size_t section) { return m_module!=nullptr; }
 
 bool dpDllFile::callHandler( dpEventType e )
 {

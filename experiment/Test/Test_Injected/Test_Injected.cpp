@@ -9,7 +9,7 @@
 #include <clocale>
 #include <algorithm>
 
-#include "../DynamicPatcher.h"
+#include "DynamicPatcher.h"
 
 
 dpNoInline bool GetEndFlag()

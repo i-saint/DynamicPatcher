@@ -50,7 +50,8 @@ struct dpSymbol
 
     dpSymbol(const char *nam, void *addr, int fla, int sect, dpBinary *bin);
     ~dpSymbol();
-    const dpSymbolS& simplify() const { return (const dpSymbolS&)*this; }
+    const dpSymbolS& simplify() const;
+    bool partialLink();
 };
 inline bool operator< (const dpSymbol &a, const dpSymbol &b) { return strcmp(a.name, b.name)<0; }
 inline bool operator==(const dpSymbol &a, const dpSymbol &b) { return strcmp(a.name, b.name)==0; }
@@ -88,7 +89,7 @@ dpConfig& dpGetConfig();
 void    dpPrintError(const char* fmt, ...);
 void    dpPrintWarning(const char* fmt, ...);
 void    dpPrintInfo(const char* fmt, ...);
-void    dpPrintTrivial(const char* fmt, ...);
+void    dpPrintDetail(const char* fmt, ...);
 
 void*   dpAllocateForward(size_t size, void *location);
 void*   dpAllocateBackward(size_t size, void *location);
@@ -166,17 +167,16 @@ typedef dpBlockAllocator<1024*256, sizeof(dpSymbol)> dpSymbolAllocator;
 class dpSymbolTable
 {
 public:
+    dpSymbolTable();
     void addSymbol(dpSymbol *v);
     void merge(const dpSymbolTable &v);
     void sort();
     void clear();
+    void            enablePartialLink(bool v);
     size_t          getNumSymbols() const;
     dpSymbol*       getSymbol(size_t i);
     dpSymbol*       findSymbolByName(const char *name);
     dpSymbol*       findSymbolByAddress(void *sym);
-    const dpSymbol* getSymbol(size_t i) const;
-    const dpSymbol* findSymbolByName(const char *name) const;
-    const dpSymbol* findSymbolByAddress(void *sym) const;
 
     // F: [](const dpSymbol *sym)
     template<class F>
@@ -189,6 +189,7 @@ public:
 private:
     typedef std::vector<dpSymbol*> symbol_cont;
     symbol_cont m_symbols;
+    bool m_partial_link;
 };
 
 #define dpGetBuilder()  m_context->getBuilder()
@@ -205,6 +206,7 @@ public:
     virtual bool loadFile(const char *path)=0;
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime)=0;
     virtual bool link()=0;
+    virtual bool partialLink(size_t section)=0;
     virtual bool callHandler(dpEventType e)=0;
 
     virtual dpSymbolTable& getSymbolTable()=0;
@@ -229,6 +231,7 @@ public:
     virtual bool loadFile(const char *path);
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime);
     virtual bool link();
+    virtual bool partialLink(size_t section);
     virtual bool callHandler(dpEventType e);
 
     virtual dpSymbolTable& getSymbolTable();
@@ -237,25 +240,29 @@ public:
     virtual dpFileType     getFileType() const;
 
     void* getBaseAddress() const;
-    bool  link(int section);
 
 private:
+    struct RelocationData
+    {
+        uint32_t base;
+        RelocationData() : base(0) {}
+    };
     struct LinkData // section と対になるデータ
     {
         uint32_t flags;
-
         LinkData() : flags(dpE_NeedsLink|dpE_NeedsBase) {}
     };
-    typedef std::vector<LinkData> link_cont;
-    typedef std::map<size_t, size_t> RelocBaseMap;
+    typedef std::vector<LinkData>       link_cont;
+    typedef std::vector<RelocationData> reloc_cont;
     void  *m_data;
     size_t m_size;
     void  *m_aligned_data;
     size_t m_aligned_datasize;
     std::string m_path;
     dpTime m_mtime;
-    RelocBaseMap m_reloc_bases;
     dpSymbolTable m_symbols;
+    link_cont m_linkdata;
+    reloc_cont m_relocdata;
 
     void* resolveSymbol(const char *name);
 };
@@ -270,6 +277,7 @@ public:
     virtual bool loadFile(const char *path);
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime);
     virtual bool link();
+    virtual bool partialLink(size_t section);
     virtual bool callHandler(dpEventType e);
 
     virtual dpSymbolTable& getSymbolTable();
@@ -304,6 +312,7 @@ public:
     virtual bool loadFile(const char *path);
     virtual bool loadMemory(const char *name, void *data, size_t datasize, dpTime filetime);
     virtual bool link();
+    virtual bool partialLink(size_t section);
     virtual bool callHandler(dpEventType e);
 
     virtual dpSymbolTable& getSymbolTable();
@@ -341,8 +350,6 @@ public:
 
     dpSymbol* findSymbolByName(const char *name);
     dpSymbol* findSymbolByAddress(void *addr);
-    dpSymbol* findAndLinkSymbolByName(const char *name);
-    dpSymbol* findAndLinkSymbolByAddress(void *addr);
     dpSymbol* findHostSymbolByName(const char *name);
     dpSymbol* findHostSymbolByAddress(void *addr);
 

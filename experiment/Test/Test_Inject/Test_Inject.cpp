@@ -4,7 +4,7 @@
 
 #include <cstdio>
 
-#include "../DynamicPatcher.h"
+#include "DynamicPatcher.h"
 
 #ifdef _M_X64
 #   define dpPlatform "x64"

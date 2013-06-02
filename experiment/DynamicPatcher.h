@@ -76,17 +76,17 @@ enum dpLogLevel {
     dpE_LogError   = 0x1,
     dpE_LogWarning = 0x2,
     dpE_LogInfo    = 0x4,
-    dpE_LogTrivial = 0x8,
+    dpE_LogDetail  = 0x8,
 
-    dpE_LogAll      = dpE_LogError|dpE_LogWarning|dpE_LogInfo|dpE_LogTrivial,
+    dpE_LogDetailed = dpE_LogError|dpE_LogWarning|dpE_LogInfo|dpE_LogDetail,
     dpE_LogSimple   = dpE_LogError|dpE_LogWarning|dpE_LogInfo,
     dpE_LogNone     = 0,
 };
 enum dpSystemFlags {
-    dpE_AutoPatchExportFunctions = 0x1, // patch exported (dllexport==dpPatch) functions automatically when the module is loaded
+    dpE_AutoPatchExports = 0x1, // patch exported (dllexport==dpPatch) functions automatically when the module is loaded
     dpE_DelayedLink = 0x2,
 
-    dpE_SysDefault = dpE_AutoPatchExportFunctions|dpE_DelayedLink,
+    dpE_SysDefault = dpE_AutoPatchExports|dpE_DelayedLink,
 };
 
 struct dpConfig
@@ -94,7 +94,7 @@ struct dpConfig
     int log_level; // combination of dpLogLevel
     int sysflags; // combination of dpSystemFlags
 
-    dpConfig(int log=dpE_LogAll, int f=dpE_SysDefault) : log_level(log), sysflags(f)
+    dpConfig(int log=dpE_LogDetailed, int f=dpE_SysDefault) : log_level(log), sysflags(f)
     {}
 };
 
