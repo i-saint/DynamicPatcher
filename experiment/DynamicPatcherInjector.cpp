@@ -14,6 +14,8 @@
 #   define InjectorDLL       "DynamicPatcherInjectorDLL.dll"
 #endif // _M_IX64
 
+Options g_option;
+
 // VirtualAllocEx で dll の path を対象プロセスに書き込み、
 // CreateRemoteThread で対象プロセスにスレッドを作って、↑で書き込んだ dll path をパラメータにして LoadLibraryA を呼ぶ。
 // 結果、対象プロセス内で任意の dll を実行させる。 
@@ -61,7 +63,10 @@ bool TryInject(const char *process_name, const char *dllname)
         DWORD cbNeeded2;
         if(::EnumProcessModules(hProcess, &hMod, sizeof(hMod), &cbNeeded2)) {
             ::GetModuleBaseNameA(hProcess, hMod, szProcessName, sizeof(szProcessName)/sizeof(TCHAR));
-            if(strstr(szProcessName, process_name)!=NULL && InjectDLL(hProcess, dll_fullpath)) {
+            if( strstr(szProcessName, process_name)!=NULL &&
+                g_option.copyShared(process_name) &&
+                InjectDLL(hProcess, dll_fullpath))
+            {
                 printf("injection completed\n");
                 fflush(stdout);
                 return true;
@@ -76,7 +81,7 @@ bool TryInject(const char *process_name, const char *dllname)
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE prev, LPWSTR cmd, int show)
 {
-    Options opt;
-    TryInject(opt.target_process.c_str(), InjectorDLL);
+    g_option.loadHost();
+    TryInject(g_option.target_process.c_str(), InjectorDLL);
     return 0;
 }

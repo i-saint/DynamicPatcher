@@ -15,6 +15,7 @@
 void OnLoad()
 {
     Options opt;
+    opt.loadDLL();
     dpInitialize();
     for(size_t i=0; i<opt.load_module.size(); ++i) {
         dpLoad(opt.load_module[i].c_str());
