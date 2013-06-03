@@ -45,6 +45,7 @@ dpAPI bool dpInitialize(const dpConfig &conf)
         ::SymInitialize(::GetCurrentProcess(), NULL, TRUE);
         ::SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
         g_dpDefaultContext = new dpContext();
+        g_dpConfig = conf;
         return true;
     }
     return false;
