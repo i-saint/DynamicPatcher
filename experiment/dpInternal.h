@@ -98,18 +98,17 @@ void*   dpAllocateBackward(size_t size, void *location);
 void*   dpAllocateModule(size_t size);
 void    dpDeallocate(void *location, size_t size);
 dpTime  dpGetFileModifiedTime(const char *path);
-bool    dpDemangle(const char *mangled, char *demangled, size_t buflen);
 
-char* dpGetPDBPathFromModule(void *pModule, bool fill_gap=false);
-bool dpCopyFile(const char *srcpath, const char *dstpath);
+char*   dpGetPDBPathFromModule(void *pModule, bool fill_gap=false);
+bool    dpCopyFile(const char *srcpath, const char *dstpath);
 
 template<class F> void dpGlob(const char *path, const F &f);
 template<class F> bool dpMapFile(const char *path, void *&o_data, size_t &o_size, const F &alloc);
-bool dpWriteFile(const char *path, const void *data, size_t size);
-bool dpDeleteFile(const char *path);
-bool dpFileExists(const char *path);
-size_t dpSeparateDirFile(const char *path, std::string *dir, std::string *file);
-size_t dpSeparateFileExt(const char *filename, std::string *file, std::string *ext);
+bool    dpWriteFile(const char *path, const void *data, size_t size);
+bool    dpDeleteFile(const char *path);
+bool    dpFileExists(const char *path);
+size_t  dpSeparateDirFile(const char *path, std::string *dir, std::string *file);
+size_t  dpSeparateFileExt(const char *filename, std::string *file, std::string *ext);
 
 // アラインが必要な section データを再配置するための単純なアロケータ
 class dpSectionAllocator
@@ -344,6 +343,7 @@ public:
     dpLibFile* loadLib(const char *path);
     dpDllFile* loadDll(const char *path);
     bool       unload(const char *path);
+    size_t     reload();
     bool       link();
 
     size_t    getNumBinaries() const;
@@ -417,12 +417,17 @@ public:
     ~dpBuilder();
     void addLoadPath(const char *path);
     void addSourcePath(const char *path);
-    bool startAutoBuild(const char *build_options, bool create_console);
+    void addMSBuildCommand(const char *msbuild_options);
+    void addBuildCommand(const char *any_command);
+    bool startAutoBuild(bool create_console);
     bool stopAutoBuild();
 
-    void update();
-    void watchFiles();
-    bool build();
+    void   update();
+    size_t reload();
+    void   watchFiles();
+    bool   build();
+
+    const char* getVCVars() const;
 
 private:
     struct SourcePath
@@ -434,13 +439,13 @@ private:
     dpContext *m_context;
     std::string m_vcvars;
     std::string m_msbuild;
-    std::string m_msbuild_option;
-    std::vector<SourcePath> m_srcpathes;
+    std::vector<std::string> m_build_commands;
+    std::vector<SourcePath>  m_srcpathes;
     std::vector<std::string> m_loadpathes;
     bool m_create_console;
     mutable bool m_build_done;
     bool m_watchfile_stop;
-    HANDLE m_thread_watchfile;
+    HANDLE m_thread_autobuild;
 };
 
 
@@ -468,12 +473,6 @@ public:
     bool   patchByAddress(void *hook);
     bool   unpatchByAddress(void *target_or_hook_addr);
     void*  getUnpatched(void *target_or_hook_addr);
-
-    void   addLoadPath(const char *path);
-    void   addSourcePath(const char *path);
-    bool   startAutoBuild(const char *msbuild_option, bool console=false);
-    bool   stopAutoBuild();
-    void   update();
 
 private:
     dpBuilder *m_builder;

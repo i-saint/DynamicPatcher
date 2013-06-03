@@ -113,29 +113,3 @@ void* dpContext::getUnpatched(void *target)
     }
     return nullptr;
 }
-
-void dpContext::addLoadPath(const char *path)
-{
-    m_builder->addLoadPath(path);
-}
-
-void dpContext::addSourcePath(const char *path)
-{
-    m_builder->addSourcePath(path);
-}
-
-bool dpContext::startAutoBuild(const char *msbuild_option, bool console)
-{
-    return m_builder->startAutoBuild(msbuild_option, console);
-}
-
-bool dpContext::stopAutoBuild()
-{
-    return m_builder->stopAutoBuild();
-}
-
-void dpContext::update()
-{
-    m_builder->update();
-    m_loader->link();
-}

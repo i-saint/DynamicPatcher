@@ -112,25 +112,39 @@ dpAPI void* dpGetUnpatched(void *target_or_hook_addr)
 
 dpAPI void dpAddLoadPath(const char *path)
 {
-    dpGetCurrentContext()->addLoadPath(path);
+    dpGetCurrentContext()->getBuilder()->addLoadPath(path);
 }
 
 dpAPI void dpAddSourcePath(const char *path)
 {
-    dpGetCurrentContext()->addSourcePath(path);
+    dpGetCurrentContext()->getBuilder()->addSourcePath(path);
+}
+dpAPI void dpAddMSBuildCommand(const char *msbuild_option)
+{
+    dpGetCurrentContext()->getBuilder()->addMSBuildCommand(msbuild_option);
 }
 
-dpAPI bool dpStartAutoBuild(const char *option, bool console)
+dpAPI void dpAddBuildCommand(const char *any_command)
 {
-    return dpGetCurrentContext()->startAutoBuild(option, console);
+    dpGetCurrentContext()->getBuilder()->addBuildCommand(any_command);
+}
+
+dpAPI bool dpStartAutoBuild(bool console)
+{
+    return dpGetCurrentContext()->getBuilder()->startAutoBuild(console);
 }
 
 dpAPI bool dpStopAutoBuild()
 {
-    return dpGetCurrentContext()->stopAutoBuild();
+    return dpGetCurrentContext()->getBuilder()->stopAutoBuild();
 }
 
 dpAPI void dpUpdate()
 {
-    dpGetCurrentContext()->update();
+    dpGetCurrentContext()->getBuilder()->update();
+}
+
+dpAPI const char* dpGetVCVars()
+{
+    return dpGetCurrentContext()->getBuilder()->getVCVars();
 }

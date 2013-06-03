@@ -109,31 +109,35 @@ dpAPI void       dpDeleteContext(dpContext *ctx);
 dpAPI void       dpSetCurrentContext(dpContext *ctx); // current context is thread local
 dpAPI dpContext* dpGetCurrentContext(); // default is dpGetDefaultContext()
 
-dpAPI size_t dpLoad(const char *path); // path to .obj .lib .dll .exe. accept wildcard (ex: x64/Debug/*.obj)
+dpAPI size_t dpLoad(const char *path); // path to .obj .lib .dll .exe. accepts wildcard (ex: x64/Debug/*.obj)
 dpAPI bool   dpLoadObj(const char *path); // load as .obj regardless file extension
 dpAPI bool   dpLoadLib(const char *path); // load as .lib regardless file extension
 dpAPI bool   dpLoadDll(const char *path); // load as .dll regardless file extension
 dpAPI bool   dpUnload(const char *path);
 dpAPI bool   dpLink(); // must be called after dpLoad*()s & dpUnload()s. onload handler is called in this.
 
-dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex);
+dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex); // ex: dpPatchByFile("MyClass.obj", "MyClass::.*")
 #ifdef dpWithStdFunction
 dpAPI size_t dpPatchByFile(const char *filename, const std::function<bool (const dpSymbolS&)> &condition);
 #endif // dpWithStdFunction
 dpAPI bool   dpPatchNameToName(const char *target_name, const char *hook_name);
 dpAPI bool   dpPatchAddressToName(const char *target_name, void *hook_addr);
 dpAPI bool   dpPatchAddressToAddress(void *target, void *hook_addr);
-dpAPI bool   dpPatchByAddress(void *hook_addr); // patch the host symbol that have same name of hook
+dpAPI bool   dpPatchByAddress(void *hook_addr); // patches the host symbol that have same name of hook
 dpAPI bool   dpUnpatchByAddress(void *target_or_hook_addr);
 dpAPI void*  dpGetUnpatched(void *target_or_hook_addr);
 
-dpAPI void   dpAddLoadPath(const char *path); // accept wildcard.
-dpAPI void   dpAddSourcePath(const char *path);
-dpAPI bool   dpStartAutoBuild(const char *msbuild_option, bool console=false);
+dpAPI void   dpAddLoadPath(const char *path); // accepts wildcard. affects auto build and dpReload()
+dpAPI void   dpAddSourcePath(const char *path); // 
+dpAPI void   dpAddMSBuildCommand(const char *msbuild_option); // add msbuild command that will be called by auto build thread
+dpAPI void   dpAddBuildCommand(const char *any_command); // add arbitrary command that will be called by auto build thread
+dpAPI bool   dpStartAutoBuild(bool console=false);
 dpAPI bool   dpStopAutoBuild();
-dpAPI void   dpUpdate();
+dpAPI void   dpUpdate(); // reloads and links modified modules.
 
-dpAPI void   dpPrint(const char* fmt, ...);
+dpAPI void          dpPrint(const char* fmt, ...);
+dpAPI bool          dpDemangle(const char *mangled, char *demangled, size_t buflen);
+dpAPI const char*   dpGetVCVars();
 
 #else  // dpDisable
 
@@ -168,11 +172,15 @@ dpAPI void   dpPrint(const char* fmt, ...);
 
 #define dpAddLoadPath(...) 
 #define dpAddSourcePath(...) 
+#define dpAddMSBuildCommand(...) 
+#define dpAddBuildCommand(...) 
 #define dpStartAutoBuild(...) 
 #define dpStopAutoBuild(...) 
 #define dpUpdate(...) 
 
 #define dpPrint(...) 
+#define dpDemangle(...) 
+#define dpGetVCVars(...) 
 
 #endif // dpDisable
 

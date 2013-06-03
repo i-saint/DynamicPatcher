@@ -36,7 +36,8 @@ dpOnLoad(
 
     dpAddLoadPath(dpObjDir"/*.obj");
     dpAddSourcePath("Test_Inject");
-    dpStartAutoBuild("Test_Inject.vcxproj /target:ClCompile /m /p:Configuration="dpConfiguration";Platform="dpPlatform, false);
+    dpAddMSBuildCommand("Test_Inject.vcxproj /target:ClCompile /m /p:Configuration="dpConfiguration";Platform="dpPlatform);
+    dpStartAutoBuild(false);
 
     dpPatchByAddress(&Test_ThisMaybeOverridden);
     dpPatchByAddress(&GetEndFlag);

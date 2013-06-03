@@ -7,11 +7,11 @@
 
 dpBuilder::dpBuilder(dpContext *ctx)
     : m_context(ctx)
-    , m_msbuild_option()
+    , m_build_commands()
     , m_create_console(false)
     , m_build_done(false)
     , m_watchfile_stop(false)
-    , m_thread_watchfile(nullptr)
+    , m_thread_autobuild(nullptr)
 {
     std::string VCVersion;
 #if     _MSC_VER==1500
@@ -72,21 +72,34 @@ void dpBuilder::addSourcePath(const char *path)
     if(p==m_srcpathes.end()) { m_srcpathes.push_back(tmp); }
 }
 
+void dpBuilder::addMSBuildCommand(const char *msbuild_options)
+{
+    m_build_commands.push_back(m_msbuild+' '+msbuild_options+" /nologo");
+}
+
+void dpBuilder::addBuildCommand(const char *any_command)
+{
+    m_build_commands.push_back(any_command);
+}
+
 static void WatchFile( LPVOID arg )
 {
     ((dpBuilder*)arg)->watchFiles();
 }
 
-bool dpBuilder::startAutoBuild(const char *build_options, bool create_console)
+bool dpBuilder::startAutoBuild(bool create_console)
 {
-    if(!m_thread_watchfile) {
-        m_msbuild_option = build_options;
+    if(!m_thread_autobuild) {
+        if(m_build_commands.empty()) {
+            dpPrintError("dpStartAutoBuild(): no build commands.\n");
+            return false;
+        }
         m_create_console = create_console;
         if(create_console) {
             ::AllocConsole();
         }
         m_watchfile_stop = false;
-        m_thread_watchfile = (HANDLE)_beginthread( WatchFile, 0, this );
+        m_thread_autobuild = (HANDLE)_beginthread( WatchFile, 0, this );
         dpPrintInfo("build thread started\n");
         return true;
     }
@@ -95,10 +108,10 @@ bool dpBuilder::startAutoBuild(const char *build_options, bool create_console)
 
 bool dpBuilder::stopAutoBuild()
 {
-    if(m_thread_watchfile!=nullptr) {
+    if(m_thread_autobuild!=nullptr) {
         m_watchfile_stop = true;
-        ::WaitForSingleObject(m_thread_watchfile, INFINITE);
-        m_thread_watchfile = nullptr;
+        ::WaitForSingleObject(m_thread_autobuild, INFINITE);
+        m_thread_autobuild = nullptr;
         dpPrintInfo("build thread stopped\n");
         return true;
     }
@@ -142,48 +155,65 @@ void dpBuilder::watchFiles()
 bool dpBuilder::build()
 {
     dpPrintInfo("build begin\n");
-    std::string command = m_msbuild;
-    command+=' ';
-    command+=m_msbuild_option;
 
-    STARTUPINFOA si; 
-    PROCESS_INFORMATION pi; 
-    memset(&si, 0, sizeof(si)); 
-    memset(&pi, 0, sizeof(pi)); 
-    si.cb = sizeof(si);
-    if(::CreateProcessA(NULL, (LPSTR)command.c_str(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)==TRUE) {
-        DWORD exit_code = 0;
-        ::WaitForSingleObject(pi.hThread, INFINITE);
-        ::WaitForSingleObject(pi.hProcess, INFINITE);
-        ::GetExitCodeProcess(pi.hProcess, &exit_code);
-        ::CloseHandle(pi.hThread);
-        ::CloseHandle(pi.hProcess);
-        ::Sleep(500); // 終了直後だとファイルの書き込みが終わってないことがあるっぽい？ので少し待つ…
-        m_build_done = true;
-        if(exit_code!=0) {
-            dpPrintError("build failed.\n");
-            return false;
+    for(size_t i=0; i<m_build_commands.size(); ++i) {
+        const std::string &command = m_build_commands[i];
+
+        STARTUPINFOA si; 
+        PROCESS_INFORMATION pi; 
+        memset(&si, 0, sizeof(si)); 
+        memset(&pi, 0, sizeof(pi)); 
+        si.cb = sizeof(si);
+        if(::CreateProcessA(NULL, (LPSTR)command.c_str(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)==TRUE) {
+            DWORD exit_code = 0;
+            ::WaitForSingleObject(pi.hThread, INFINITE);
+            ::WaitForSingleObject(pi.hProcess, INFINITE);
+            ::GetExitCodeProcess(pi.hProcess, &exit_code);
+            ::CloseHandle(pi.hThread);
+            ::CloseHandle(pi.hProcess);
+            if(exit_code!=0) {
+                dpPrintError("build failed\n");
+                return false;
+            }
         }
     }
-    dpPrintInfo("build end\n");
+    ::Sleep(500); // 終了直後だとファイルの書き込みが終わってないことがあるっぽい？ので少し待つ…
+
+    m_build_done = true;
+    dpPrintInfo("build succeeded\n");
     return true;
 }
 
 void dpBuilder::update()
 {
-    if(m_build_done) {
-        m_build_done = false;
-
-        size_t num_loaded = 0;
-        for(size_t i=0; i<m_loadpathes.size(); ++i) {
-            dpGlob(m_loadpathes[i].c_str(), [&](const std::string &path){
-                if(dpGetLoader()->load(path.c_str())) {
-                    ++num_loaded;
-                }
-            });
-        }
-        if(num_loaded) {
-            dpGetLoader()->link();
+    if(m_thread_autobuild) {
+        if(m_build_done) {
+            m_build_done = false;
+            reload();
         }
     }
+    else {
+        reload();
+    }
+}
+
+size_t dpBuilder::reload()
+{
+    size_t n = 0;
+    for(size_t i=0; i<m_loadpathes.size(); ++i) {
+        dpGlob(m_loadpathes[i].c_str(), [&](const std::string &path){
+            dpBinary *old = dpGetLoader()->findBinary(path.c_str());
+            if(dpBinary *bin = dpGetLoader()->load(path.c_str())) {
+                if(bin!=old) { ++n; }
+            }
+        });
+    }
+    n += dpGetLoader()->reload();
+    dpGetLoader()->link();
+    return n;
+}
+
+const char* dpBuilder::getVCVars() const
+{
+    return m_vcvars.c_str();
 }

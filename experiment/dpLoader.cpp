@@ -129,6 +129,17 @@ bool dpLoader::unload(const char *path)
     return false;
 }
 
+size_t dpLoader::reload()
+{
+    size_t n = 0;
+    eachBinaries([&](dpBinary *bin){
+        if(dpBinary *r=load(bin->getPath())) {
+            if(r!=bin) { ++n; }
+        }
+    });
+    return n;
+}
+
 bool dpLoader::link()
 {
     if(m_onload_queue.empty()) {

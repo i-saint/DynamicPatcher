@@ -67,6 +67,11 @@ void dpPrintDetail(const char* fmt, ...)
     va_end(vl);
 }
 
+dpAPI bool dpDemangle(const char *mangled, char *demangled, size_t buflen)
+{
+    return ::UnDecorateSymbolName(mangled, demangled, (DWORD)buflen, UNDNAME_NAME_ONLY)!=0;
+}
+
 
 
 // 位置指定版 VirtualAlloc()
@@ -127,11 +132,6 @@ dpTime dpGetFileModifiedTime(const char *path)
     ::GetFileTime(h, NULL, NULL, &ret.filetime);
     ::CloseHandle(h);
     return ret.qword;
-}
-
-bool dpDemangle(const char *mangled, char *demangled, size_t buflen)
-{
-    return ::UnDecorateSymbolName(mangled, demangled, (DWORD)buflen, UNDNAME_NAME_ONLY)!=0;
 }
 
 // fill_gap: .dll ファイルをそのままメモリに移した場合はこれを true にする必要があります。
