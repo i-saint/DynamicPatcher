@@ -14,10 +14,13 @@ dpBuilder::dpBuilder(dpContext *ctx)
 {
     std::string VCVersion;
     switch(dpGetConfig().vc_ver) {
-    case 1500: VCVersion="9.0";  break;
-    case 1600: VCVersion="10.0"; break;
-    case 1700: VCVersion="11.0"; break;
-    default: dpPrintError("unknown VC version %d\n", dpGetConfig().vc_ver);
+    case 2008: VCVersion="9.0";  break;
+    case 2010: VCVersion="10.0"; break;
+    case 2012: VCVersion="11.0"; break;
+    default:
+        dpPrintError("unknown VC version (%d). use 2010.\n", dpGetConfig().vc_ver);
+        VCVersion="10.0";
+        break;
     }
 
     std::string keyName = "SOFTWARE\\Microsoft\\VisualStudio\\SxS\\VC7";

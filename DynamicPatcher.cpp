@@ -40,17 +40,22 @@ dpAPI bool dpInitialize(const dpConfig &conf)
     if(!g_dpDefaultContext) {
         ::SymInitialize(::GetCurrentProcess(), NULL, TRUE);
         ::SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
-        g_dpDefaultContext = new dpContext();
 
         dpConfig &g_dpConfig = dpGetConfig();
         g_dpConfig = conf;
         g_dpConfig.starttime = dpGetSystemTime();
 
         dpConfigFile cf;
+        bool config_loaded = false;
         if((conf.sys_flags&dpE_SysLoadConfig)!=0 && cf.load()) {
+            config_loaded = true;
             if(cf.log_flags!=-1) { g_dpConfig.log_flags=cf.log_flags; }
             if(cf.sys_flags!=-1) { g_dpConfig.sys_flags=cf.sys_flags; }
             if(cf.vc_ver!=-1)    { g_dpConfig.vc_ver=cf.vc_ver; }
+        }
+        g_dpDefaultContext = new dpContext();
+
+        if(config_loaded) {
             if(!cf.loads.empty()) {
                 dpEach(cf.loads, [](const std::string &path){
                     dpLoad(path.c_str());

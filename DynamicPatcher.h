@@ -95,11 +95,19 @@ struct dpConfig
 {
     int log_flags; // combination of dpLogLevel
     int sys_flags; // combination of dpSystemFlags
-    int vc_ver; // _MSC_VER. 1500==VisualStudio2008, 1600==VisualStudio2010, 1700==VisualStudio2012
+    int vc_ver; // VisualC++ version to use to build. 2008/2010/2012
     unsigned long long starttime;
 
-    dpConfig(int log=dpE_LogSimple, int f=dpE_SysDefault) : log_flags(log), sys_flags(f), vc_ver(_MSC_VER), starttime()
-    {}
+    dpConfig(int log=dpE_LogSimple, int f=dpE_SysDefault) : log_flags(log), sys_flags(f), vc_ver(0), starttime()
+    {
+#if   _MSC_VER==1500
+        vc_ver = 2008;
+#elif _MSC_VER==1600
+        vc_ver = 2010;
+#elif _MSC_VER==1700
+        vc_ver = 2012;
+#endif
+    }
 };
 
 class dpContext;
