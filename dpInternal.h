@@ -11,6 +11,7 @@
 #include <set>
 #include <map>
 #include <algorithm>
+#include "DynamicPatcher.h"
 
 typedef unsigned long long dpTime;
 class dpBinary;
@@ -97,7 +98,8 @@ void*   dpAllocateForward(size_t size, void *location);
 void*   dpAllocateBackward(size_t size, void *location);
 void*   dpAllocateModule(size_t size);
 void    dpDeallocate(void *location, size_t size);
-dpTime  dpGetFileModifiedTime(const char *path);
+dpTime  dpGetMTime(const char *path);
+dpTime  dpGetSystemTime();
 
 char*   dpGetPDBPathFromModule(void *pModule, bool fill_gap=false);
 bool    dpCopyFile(const char *srcpath, const char *dstpath);
@@ -109,6 +111,10 @@ bool    dpDeleteFile(const char *path);
 bool    dpFileExists(const char *path);
 size_t  dpSeparateDirFile(const char *path, std::string *dir, std::string *file);
 size_t  dpSeparateFileExt(const char *filename, std::string *file, std::string *ext);
+size_t  dpGetCurrentModulePath(char *buf, size_t buflen);
+size_t  dpGetMainModulePath(char *buf, size_t buflen);
+void    dpSanitizePath(std::string &path);
+
 
 // アラインが必要な section データを再配置するための単純なアロケータ
 class dpSectionAllocator
@@ -197,6 +203,26 @@ private:
 #define dpGetPatcher()  m_context->getPatcher()
 #define dpGetLoader()   m_context->getLoader()
 
+
+struct dpConfigFile
+{
+    int log_flags;
+    int sys_flags;
+    int vc_ver;
+    std::vector<std::string> loads;
+    std::vector<std::string> source_paths;
+    std::vector<std::string> load_paths;
+    std::vector<std::string> msbuild_commands;
+    std::vector<std::string> build_commands;
+    std::string target_process;
+    std::string config_path;
+
+    dpConfigFile();
+    bool copy(const char *name);
+    bool load();
+    bool load(const char *path);
+    bool load(const wchar_t *path);
+};
 
 
 class dpBinary
@@ -419,7 +445,7 @@ public:
     void addSourcePath(const char *path);
     void addMSBuildCommand(const char *msbuild_options);
     void addBuildCommand(const char *any_command);
-    bool startAutoBuild(bool create_console);
+    bool startAutoBuild();
     bool stopAutoBuild();
 
     void   update();
@@ -442,7 +468,6 @@ private:
     std::vector<std::string> m_build_commands;
     std::vector<SourcePath>  m_srcpathes;
     std::vector<std::string> m_loadpathes;
-    bool m_create_console;
     mutable bool m_build_done;
     bool m_watchfile_stop;
     HANDLE m_thread_autobuild;
@@ -479,7 +504,6 @@ private:
     dpPatcher *m_patcher;
     dpLoader  *m_loader;
 };
-
 
 
 

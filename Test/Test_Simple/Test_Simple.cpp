@@ -74,9 +74,9 @@ int main(int argc, char *argv[])
     dpAddLoadPath(dpObjDir"/*.obj");
     dpAddSourcePath("Test_Simple");
     dpAddMSBuildCommand("Test_Simple.vcxproj /target:ClCompile /m /p:Configuration="dpConfiguration";Platform="dpPlatform);
-    dpStartAutoBuild(false);
+    dpStartAutoBuild();
 
-    dpLoad(dpObjDir"/*.obj");
+    //dpLoad(dpObjDir"/*.obj");
     dpLink();
 
     printf("DynamicPatcher Test_Simple\n");

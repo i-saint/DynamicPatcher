@@ -20,6 +20,7 @@
     </ClCompile>
     <ClCompile Include="dpFoundation.cpp" />
     <ClCompile Include="dpContext.cpp" />
+    <ClCompile Include="dpConfig.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DynamicPatcher.h" />

@@ -50,6 +50,7 @@
     <ClCompile Include="disasm-lib\misc.c" />
     <ClCompile Include="dpBinary.cpp" />
     <ClCompile Include="dpBuilder.cpp" />
+    <ClCompile Include="dpConfig.cpp" />
     <ClCompile Include="dpContext.cpp" />
     <ClCompile Include="dpFoundation.cpp" />
     <ClCompile Include="dpLoader.cpp" />

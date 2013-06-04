@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
     dpAddSourcePath("Test_LibDll");
     dpAddMSBuildCommand("Test_Lib.vcxproj /target:Build /m /p:Configuration="dpConfiguration";Platform="dpPlatform);
     dpAddMSBuildCommand("Test_Dll.vcxproj /target:Build /m /p:Configuration="dpConfiguration";Platform="dpPlatform);
-    dpStartAutoBuild(false);
+    dpStartAutoBuild();
 
     // fail test
     //dpLoadLib("Test_Dll.dll");

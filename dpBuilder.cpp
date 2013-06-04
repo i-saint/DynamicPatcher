@@ -8,21 +8,17 @@
 dpBuilder::dpBuilder(dpContext *ctx)
     : m_context(ctx)
     , m_build_commands()
-    , m_create_console(false)
     , m_build_done(false)
     , m_watchfile_stop(false)
     , m_thread_autobuild(nullptr)
 {
     std::string VCVersion;
-#if     _MSC_VER==1500
-    VCVersion = "9.0";
-#elif   _MSC_VER==1600
-    VCVersion = "10.0";
-#elif   _MSC_VER==1700
-    VCVersion = "11.0";
-#else
-#   error
-#endif
+    switch(dpGetConfig().vc_ver) {
+    case 1500: VCVersion="9.0";  break;
+    case 1600: VCVersion="10.0"; break;
+    case 1700: VCVersion="11.0"; break;
+    default: dpPrintError("unknown VC version %d\n", dpGetConfig().vc_ver);
+    }
 
     std::string keyName = "SOFTWARE\\Microsoft\\VisualStudio\\SxS\\VC7";
     char value[MAX_PATH];
@@ -50,16 +46,16 @@ dpBuilder::dpBuilder(dpContext *ctx)
 dpBuilder::~dpBuilder()
 {
     stopAutoBuild();
-    if(m_create_console) {
-        ::FreeConsole();
-    }
 }
 
 void dpBuilder::addLoadPath(const char *path)
 {
     std::string tmp = path;
     auto p = dpFind(m_loadpathes, [&](const std::string &s){return s==tmp;});
-    if(p==m_loadpathes.end()) { m_loadpathes.push_back(tmp); }
+    if(p==m_loadpathes.end()) {
+        std::string s=tmp; dpSanitizePath(s);
+        m_loadpathes.push_back(s);
+    }
 }
 
 void dpBuilder::addSourcePath(const char *path)
@@ -68,6 +64,8 @@ void dpBuilder::addSourcePath(const char *path)
     ::GetFullPathNameA(path, MAX_PATH, fullpath, nullptr);
 
     SourcePath tmp = {fullpath, NULL};
+    dpSanitizePath(tmp.path);
+
     auto p = dpFind(m_srcpathes, [&](const SourcePath &s){return s.path==tmp.path;});
     if(p==m_srcpathes.end()) { m_srcpathes.push_back(tmp); }
 }
@@ -87,16 +85,12 @@ static void WatchFile( LPVOID arg )
     ((dpBuilder*)arg)->watchFiles();
 }
 
-bool dpBuilder::startAutoBuild(bool create_console)
+bool dpBuilder::startAutoBuild()
 {
     if(!m_thread_autobuild) {
         if(m_build_commands.empty()) {
             dpPrintError("dpStartAutoBuild(): no build commands.\n");
             return false;
-        }
-        m_create_console = create_console;
-        if(create_console) {
-            ::AllocConsole();
         }
         m_watchfile_stop = false;
         m_thread_autobuild = (HANDLE)_beginthread( WatchFile, 0, this );
@@ -202,9 +196,11 @@ size_t dpBuilder::reload()
     size_t n = 0;
     for(size_t i=0; i<m_loadpathes.size(); ++i) {
         dpGlob(m_loadpathes[i].c_str(), [&](const std::string &path){
-            dpBinary *old = dpGetLoader()->findBinary(path.c_str());
-            if(dpBinary *bin = dpGetLoader()->load(path.c_str())) {
-                if(bin!=old) { ++n; }
+            if(dpGetMTime(path.c_str())>dpGetConfig().starttime) {
+                dpBinary *old = dpGetLoader()->findBinary(path.c_str());
+                if(dpBinary *bin = dpGetLoader()->load(path.c_str())) {
+                    if(bin!=old) { ++n; }
+                }
             }
         });
     }

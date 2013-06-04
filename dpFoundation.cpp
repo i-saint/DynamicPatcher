@@ -4,6 +4,7 @@
 
 #include "DynamicPatcher.h"
 #include "dpInternal.h"
+#pragma comment(lib, "dbghelp.lib")
 
 template<size_t N>
 inline int dpVSprintf(char (&buf)[N], const char *format, va_list vl)
@@ -29,7 +30,7 @@ dpAPI void dpPrint(const char* fmt, ...)
 
 void dpPrintError(const char* fmt, ...)
 {
-    if((dpGetConfig().log_level&dpE_LogError)==0) { return; }
+    if((dpGetConfig().log_flags&dpE_LogError)==0) { return; }
     std::string format = std::string("dp error: ")+fmt; // OutputDebugStringA() は超遅いので dpPrint() 2 回呼ぶよりこうした方がまだ速い
     va_list vl;
     va_start(vl, fmt);
@@ -39,7 +40,7 @@ void dpPrintError(const char* fmt, ...)
 
 void dpPrintWarning(const char* fmt, ...)
 {
-    if((dpGetConfig().log_level&dpE_LogWarning)==0) { return; }
+    if((dpGetConfig().log_flags&dpE_LogWarning)==0) { return; }
     std::string format = std::string("dp warning: ")+fmt;
     va_list vl;
     va_start(vl, fmt);
@@ -49,7 +50,7 @@ void dpPrintWarning(const char* fmt, ...)
 
 void dpPrintInfo(const char* fmt, ...)
 {
-    if((dpGetConfig().log_level&dpE_LogInfo)==0) { return; }
+    if((dpGetConfig().log_flags&dpE_LogInfo)==0) { return; }
     std::string format = std::string("dp info: ")+fmt;
     va_list vl;
     va_start(vl, fmt);
@@ -59,7 +60,7 @@ void dpPrintInfo(const char* fmt, ...)
 
 void dpPrintDetail(const char* fmt, ...)
 {
-    if((dpGetConfig().log_level&dpE_LogDetail)==0) { return; }
+    if((dpGetConfig().log_flags&dpE_LogDetail)==0) { return; }
     std::string format = std::string("dp detail: ")+fmt;
     va_list vl;
     va_start(vl, fmt);
@@ -121,7 +122,7 @@ void dpDeallocate(void *location, size_t size)
     ::VirtualFree(location, size, MEM_RELEASE);
 }
 
-dpTime dpGetFileModifiedTime(const char *path)
+dpTime dpGetMTime(const char *path)
 {
     union RetT
     {
@@ -131,6 +132,19 @@ dpTime dpGetFileModifiedTime(const char *path)
     HANDLE h = ::CreateFileA(path, 0, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     ::GetFileTime(h, NULL, NULL, &ret.filetime);
     ::CloseHandle(h);
+    return ret.qword;
+}
+
+dpTime dpGetSystemTime()
+{
+    union RetT
+    {
+        FILETIME filetime;
+        dpTime qword;
+    } ret;
+    SYSTEMTIME systime;
+    ::GetSystemTime(&systime);
+    ::SystemTimeToFileTime(&systime, &ret.filetime);
     return ret.qword;
 }
 
@@ -228,6 +242,26 @@ size_t dpSeparateFileExt(const char *filename, std::string *file, std::string *e
     if(file){ file->insert(file->end(), filename, filename+dir_len); }
     if(ext) { ext->insert(ext->end(), filename+dir_len, filename+l); }
     return dir_len;
+}
+
+size_t dpGetCurrentModulePath(char *buf, size_t buflen)
+{
+    HMODULE mod = 0;
+    ::GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCSTR)&dpGetCurrentModulePath, &mod);
+    return ::GetModuleFileNameA(mod, buf, buflen);
+}
+
+size_t dpGetMainModulePath(char *buf, size_t buflen)
+{
+    HMODULE mod = ::GetModuleHandleA(nullptr);
+    return ::GetModuleFileNameA(mod, buf, buflen);
+}
+
+void dpSanitizePath(std::string &path)
+{
+    dpEach(path, [](char &c){
+        if(c=='/') { c='\\'; }
+    });
 }
 
 

@@ -4,13 +4,9 @@
 
 #include "DynamicPatcher.h"
 #include "dpInternal.h"
-#pragma comment(lib, "dbghelp.lib")
 
 static dpContext *g_dpDefaultContext = nullptr;
 static __declspec(thread) dpContext *g_dpCurrentContext = nullptr;
-static dpConfig g_dpConfig;
-
-dpConfig& dpGetConfig() { return g_dpConfig; }
 
 dpAPI dpContext* dpCreateContext()
 {
@@ -45,7 +41,36 @@ dpAPI bool dpInitialize(const dpConfig &conf)
         ::SymInitialize(::GetCurrentProcess(), NULL, TRUE);
         ::SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
         g_dpDefaultContext = new dpContext();
+
+        dpConfig &g_dpConfig = dpGetConfig();
         g_dpConfig = conf;
+        g_dpConfig.starttime = dpGetSystemTime();
+
+        dpConfigFile cf;
+        if((conf.sys_flags&dpE_SysLoadConfig)!=0 && cf.load()) {
+            if(cf.log_flags!=-1) { g_dpConfig.log_flags=cf.log_flags; }
+            if(cf.sys_flags!=-1) { g_dpConfig.sys_flags=cf.sys_flags; }
+            if(cf.vc_ver!=-1)    { g_dpConfig.vc_ver=cf.vc_ver; }
+            if(!cf.loads.empty()) {
+                dpEach(cf.loads, [](const std::string &path){
+                    dpLoad(path.c_str());
+                });
+                dpLink();
+            }
+            dpEach(cf.loads,            [](const std::string &v){ dpLoad(v.c_str()); });
+            dpEach(cf.source_paths,     [](const std::string &v){ dpAddSourcePath(v.c_str()); });
+            dpEach(cf.load_paths,       [](const std::string &v){ dpAddLoadPath(v.c_str()); });
+            dpEach(cf.msbuild_commands, [](const std::string &v){ dpAddMSBuildCommand(v.c_str()); });
+            dpEach(cf.build_commands,   [](const std::string &v){ dpAddBuildCommand(v.c_str()); });
+            if(!cf.source_paths.empty() && (!cf.msbuild_commands.empty() || !cf.build_commands.empty())) {
+                dpStartAutoBuild();
+            }
+
+            if((g_dpConfig.sys_flags & dpE_SysOpenConsole)!=0) {
+                ::AllocConsole();
+            }
+        }
+
         return true;
     }
     return false;
@@ -56,6 +81,9 @@ dpAPI bool dpFinalize()
     if(g_dpDefaultContext) {
         delete g_dpDefaultContext;
         g_dpDefaultContext = nullptr;
+        if((dpGetConfig().sys_flags & dpE_SysOpenConsole)!=0) {
+            ::FreeConsole();
+        }
         return true;
     }
     return false;
@@ -129,9 +157,9 @@ dpAPI void dpAddBuildCommand(const char *any_command)
     dpGetCurrentContext()->getBuilder()->addBuildCommand(any_command);
 }
 
-dpAPI bool dpStartAutoBuild(bool console)
+dpAPI bool dpStartAutoBuild()
 {
-    return dpGetCurrentContext()->getBuilder()->startAutoBuild(console);
+    return dpGetCurrentContext()->getBuilder()->startAutoBuild();
 }
 
 dpAPI bool dpStopAutoBuild()

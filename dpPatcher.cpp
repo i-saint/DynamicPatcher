@@ -119,7 +119,7 @@ void dpPatcher::patchImpl(dpPatchData &pi)
     pi.unpatched = unpatched;
     pi.unpatched_size = stab_size;
 
-    if((dpGetConfig().log_level&dpE_LogDetail)!=0) { // たぶん demangle はそこそこでかい処理なので early out
+    if((dpGetConfig().log_flags&dpE_LogDetail)!=0) { // たぶん demangle はそこそこでかい処理なので early out
         char demangled[512];
         dpDemangle(pi.target->name, demangled, sizeof(demangled));
         dpPrintDetail("patch 0x%p -> 0x%p (\"%s\" : \"%s\")\n", pi.target->address, pi.hook->address, demangled, pi.target->name);
@@ -135,7 +135,7 @@ void dpPatcher::unpatchImpl(const dpPatchData &pi)
     m_talloc.deallocate(pi.unpatched);
     m_talloc.deallocate(pi.trampoline);
 
-    if((dpGetConfig().log_level&dpE_LogDetail)!=0) {
+    if((dpGetConfig().log_flags&dpE_LogDetail)!=0) {
         char demangled[512];
         dpDemangle(pi.target->name, demangled, sizeof(demangled));
         dpPrintDetail("unpatch 0x%p (\"%s\" : \"%s\")\n", pi.target->address, demangled, pi.target->name);

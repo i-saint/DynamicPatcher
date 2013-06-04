@@ -19,10 +19,9 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="dpConfig.cpp" />
+    <ClCompile Include="dpFoundation.cpp" />
     <ClCompile Include="DynamicPatcherInjector.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="DynamicPatcherInjector.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{7986011C-5076-4506-AB77-7272257885FD}</ProjectGuid>

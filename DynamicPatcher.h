@@ -78,23 +78,27 @@ enum dpLogLevel {
     dpE_LogInfo    = 0x4,
     dpE_LogDetail  = 0x8,
 
-    dpE_LogDetailed = dpE_LogError|dpE_LogWarning|dpE_LogInfo|dpE_LogDetail,
+    dpE_LogAll      = dpE_LogError|dpE_LogWarning|dpE_LogInfo|dpE_LogDetail,
     dpE_LogSimple   = dpE_LogError|dpE_LogWarning|dpE_LogInfo,
     dpE_LogNone     = 0,
 };
 enum dpSystemFlags {
-    dpE_AutoPatchExports = 0x1, // patch exported (dllexport==dpPatch) functions automatically when the module is loaded
-    dpE_DelayedLink = 0x2,
+    dpE_SysPatchExports = 0x1, // patch exported (dllexport==dpPatch) functions automatically when modules are loaded
+    dpE_SysDelayedLink  = 0x2,
+    dpE_SysLoadConfig   = 0x4,
+    dpE_SysOpenConsole  = 0x8,
 
-    dpE_SysDefault = dpE_AutoPatchExports|dpE_DelayedLink,
+    dpE_SysDefault = dpE_SysPatchExports|dpE_SysDelayedLink|dpE_SysLoadConfig,
 };
 
 struct dpConfig
 {
-    int log_level; // combination of dpLogLevel
-    int sysflags; // combination of dpSystemFlags
+    int log_flags; // combination of dpLogLevel
+    int sys_flags; // combination of dpSystemFlags
+    int vc_ver; // _MSC_VER. 1500==VisualStudio2008, 1600==VisualStudio2010, 1700==VisualStudio2012
+    unsigned long long starttime;
 
-    dpConfig(int log=dpE_LogDetailed, int f=dpE_SysDefault) : log_level(log), sysflags(f)
+    dpConfig(int log=dpE_LogSimple, int f=dpE_SysDefault) : log_flags(log), sys_flags(f), vc_ver(_MSC_VER), starttime()
     {}
 };
 
@@ -131,7 +135,7 @@ dpAPI void   dpAddLoadPath(const char *path); // accepts wildcard. affects auto 
 dpAPI void   dpAddSourcePath(const char *path); // 
 dpAPI void   dpAddMSBuildCommand(const char *msbuild_option); // add msbuild command that will be called by auto build thread
 dpAPI void   dpAddBuildCommand(const char *any_command); // add arbitrary command that will be called by auto build thread
-dpAPI bool   dpStartAutoBuild(bool console=false);
+dpAPI bool   dpStartAutoBuild();
 dpAPI bool   dpStopAutoBuild();
 dpAPI void   dpUpdate(); // reloads and links modified modules.
 

@@ -83,7 +83,7 @@ static inline const char* dpGetSymbolName(PSTR pStringTable, PIMAGE_SYMBOL pSym)
 
 bool dpObjFile::loadFile(const char *path)
 {
-    dpTime mtime = dpGetFileModifiedTime(path);
+    dpTime mtime = dpGetMTime(path);
     if(m_symbols.getNumSymbols()>0 && mtime<=m_mtime) { return true; }
 
     void *data;
@@ -98,7 +98,7 @@ bool dpObjFile::loadFile(const char *path)
 bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mtime)
 {
     if(m_symbols.getNumSymbols()>0 && mtime<=m_mtime) { return true; }
-    m_path = path;
+    m_path = path; dpSanitizePath(m_path);
     m_data = data;
     m_size = size;
     m_mtime = mtime;
@@ -220,7 +220,7 @@ bool dpObjFile::link()
     for(size_t si=0; si<num_sections; ++si) {
         m_linkdata[si].flags |= dpE_NeedsLink;
     }
-    if((dpGetConfig().sysflags&dpE_DelayedLink)==0) {
+    if((dpGetConfig().sys_flags&dpE_SysDelayedLink)==0) {
         for(size_t si=0; si<num_sections; ++si) {
             if(!partialLink(si)) {
                 return false;
@@ -398,7 +398,7 @@ void dpLibFile::unload()
 
 bool dpLibFile::loadFile(const char *path)
 {
-    dpTime mtime = dpGetFileModifiedTime(path);
+    dpTime mtime = dpGetMTime(path);
     if(!m_objs.empty() && mtime<=m_mtime) { return true; }
 
     void *lib_data;
@@ -415,7 +415,7 @@ bool dpLibFile::loadFile(const char *path)
 bool dpLibFile::loadMemory(const char *path, void *lib_data, size_t lib_size, dpTime mtime)
 {
     if(!m_objs.empty() && mtime<=m_mtime) { return true; }
-    m_path = path;
+    m_path = path; dpSanitizePath(m_path);
     m_mtime = mtime;
 
     // .lib の構成は以下を参照
@@ -589,7 +589,7 @@ inline void dpEnumerateDLLExports(HMODULE module, const F &f)
 
 bool dpDllFile::loadFile(const char *path)
 {
-    dpTime mtime = dpGetFileModifiedTime(path);
+    dpTime mtime = dpGetMTime(path);
     if(m_module && m_path==path && mtime<=m_mtime) { return true; }
 
     // ロード中の dll と関連する pdb はロックがかかってしまい、リビルドに失敗するようになるため、
@@ -646,7 +646,7 @@ bool dpDllFile::loadMemory(const char *path, void *data, size_t /*datasize*/, dp
     if(data==nullptr) { return false; }
     if(m_module && m_path==path && mtime<=m_mtime) { return true; }
 
-    m_path = path;
+    m_path = path; dpSanitizePath(m_path);
     m_mtime = mtime;
     m_module = (HMODULE)data;
     dpEnumerateDLLExports(m_module, [&](const char *name, void *sym){

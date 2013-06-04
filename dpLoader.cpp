@@ -81,7 +81,7 @@ BinaryType* dpLoader::loadBinaryImpl(const char *path)
 {
     BinaryType *old = static_cast<BinaryType*>(findBinary(path));
     if(old) {
-        dpTime t = dpGetFileModifiedTime(path);
+        dpTime t = dpGetMTime(path);
         if(t<=old->getLastModifiedTime()) { return old; }
     }
 
@@ -89,7 +89,7 @@ BinaryType* dpLoader::loadBinaryImpl(const char *path)
     if(ret->loadFile(path)) {
         if(old) { unloadImpl(old); }
         m_binaries.push_back(ret);
-        dpPrintInfo("loaded \"%s\"\n", path);
+        dpPrintInfo("loaded \"%s\"\n", ret->getPath());
     }
     else {
         delete ret;
@@ -151,7 +151,7 @@ bool dpLoader::link()
         if(!bin->link()) { ret=false; }
     });
 
-    if((dpGetConfig().sysflags&dpE_DelayedLink)==0) {
+    if((dpGetConfig().sys_flags&dpE_SysDelayedLink)==0) {
         if(ret) {
             dpPrintInfo("link succeeded\n");
         }
@@ -162,7 +162,7 @@ bool dpLoader::link()
     }
 
     // 有効にされていれば dllexport な関数を自動的に patch
-    if((dpGetConfig().sysflags&dpE_AutoPatchExports)!=0) {
+    if((dpGetConfig().sys_flags&dpE_SysPatchExports)!=0) {
         dpEach(m_onload_queue, [&](dpBinary *b){
             b->eachSymbols([&](dpSymbol *sym){
                 if(dpIsExportFunction(sym->flags)) {

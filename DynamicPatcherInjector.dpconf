@@ -1,0 +1,8 @@
+target_process: "Test_Injected.exe"
+load: "_tmp\Test_Inject_Win32Debug\Test_Inject.obj"
+source path: "Test_Injected"
+msbuild command: "Test_Injected.vcxproj /target:ClCompile /m /p:Configuration=Debug;Platform=Win32"
+vc_ver: 0
+
+0x01ce613ff35027e4
+0x01ce61404334eebd
