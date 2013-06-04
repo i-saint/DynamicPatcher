@@ -1,0 +1,6 @@
+target_process: "TargetProcess.exe"
+load: "path_to_objs_libs_dlls_to_load\*.obj"
+source path: "path_to_sources"
+load path: "path_to_objs_libs_dlls_to_load\*.obj"
+msbuild command: "TargetProject.vcxproj /target:ClCompile /m /p:Configuration=Debug;Platform=Win32"
+build command: "any_command.bat"

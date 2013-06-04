@@ -78,24 +78,36 @@ enum dpLogLevel {
     dpE_LogInfo    = 0x4,
     dpE_LogDetail  = 0x8,
 
-    dpE_LogDetailed = dpE_LogError|dpE_LogWarning|dpE_LogInfo|dpE_LogDetail,
+    dpE_LogAll      = dpE_LogError|dpE_LogWarning|dpE_LogInfo|dpE_LogDetail,
     dpE_LogSimple   = dpE_LogError|dpE_LogWarning|dpE_LogInfo,
     dpE_LogNone     = 0,
 };
 enum dpSystemFlags {
-    dpE_AutoPatchExports = 0x1, // patch exported (dllexport==dpPatch) functions automatically when the module is loaded
-    dpE_DelayedLink = 0x2,
+    dpE_SysPatchExports = 0x1, // patch exported (dllexport==dpPatch) functions automatically when modules are loaded
+    dpE_SysDelayedLink  = 0x2,
+    dpE_SysLoadConfig   = 0x4,
+    dpE_SysOpenConsole  = 0x8,
 
-    dpE_SysDefault = dpE_AutoPatchExports|dpE_DelayedLink,
+    dpE_SysDefault = dpE_SysPatchExports|dpE_SysDelayedLink|dpE_SysLoadConfig,
 };
 
 struct dpConfig
 {
-    int log_level; // combination of dpLogLevel
-    int sysflags; // combination of dpSystemFlags
+    int log_flags; // combination of dpLogLevel
+    int sys_flags; // combination of dpSystemFlags
+    int vc_ver; // VisualC++ version to use to build. 2008/2010/2012
+    unsigned long long starttime;
 
-    dpConfig(int log=dpE_LogDetailed, int f=dpE_SysDefault) : log_level(log), sysflags(f)
-    {}
+    dpConfig(int log=dpE_LogSimple, int f=dpE_SysDefault) : log_flags(log), sys_flags(f), vc_ver(0), starttime()
+    {
+#if   _MSC_VER==1500
+        vc_ver = 2008;
+#elif _MSC_VER==1600
+        vc_ver = 2010;
+#elif _MSC_VER==1700
+        vc_ver = 2012;
+#endif
+    }
 };
 
 class dpContext;
@@ -109,31 +121,35 @@ dpAPI void       dpDeleteContext(dpContext *ctx);
 dpAPI void       dpSetCurrentContext(dpContext *ctx); // current context is thread local
 dpAPI dpContext* dpGetCurrentContext(); // default is dpGetDefaultContext()
 
-dpAPI size_t dpLoad(const char *path); // path to .obj .lib .dll .exe. accept wildcard (ex: x64/Debug/*.obj)
+dpAPI size_t dpLoad(const char *path); // path to .obj .lib .dll .exe. accepts wildcard (ex: x64/Debug/*.obj)
 dpAPI bool   dpLoadObj(const char *path); // load as .obj regardless file extension
 dpAPI bool   dpLoadLib(const char *path); // load as .lib regardless file extension
 dpAPI bool   dpLoadDll(const char *path); // load as .dll regardless file extension
 dpAPI bool   dpUnload(const char *path);
 dpAPI bool   dpLink(); // must be called after dpLoad*()s & dpUnload()s. onload handler is called in this.
 
-dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex);
+dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex); // ex: dpPatchByFile("MyClass.obj", "MyClass::.*")
 #ifdef dpWithStdFunction
 dpAPI size_t dpPatchByFile(const char *filename, const std::function<bool (const dpSymbolS&)> &condition);
 #endif // dpWithStdFunction
 dpAPI bool   dpPatchNameToName(const char *target_name, const char *hook_name);
 dpAPI bool   dpPatchAddressToName(const char *target_name, void *hook_addr);
 dpAPI bool   dpPatchAddressToAddress(void *target, void *hook_addr);
-dpAPI bool   dpPatchByAddress(void *hook_addr); // patch the host symbol that have same name of hook
+dpAPI bool   dpPatchByAddress(void *hook_addr); // patches the host symbol that have same name of hook
 dpAPI bool   dpUnpatchByAddress(void *target_or_hook_addr);
 dpAPI void*  dpGetUnpatched(void *target_or_hook_addr);
 
-dpAPI void   dpAddLoadPath(const char *path); // accept wildcard.
-dpAPI void   dpAddSourcePath(const char *path);
-dpAPI bool   dpStartAutoBuild(const char *msbuild_option, bool console=false);
+dpAPI void   dpAddLoadPath(const char *path); // accepts wildcard. affects auto build and dpReload()
+dpAPI void   dpAddSourcePath(const char *path); // 
+dpAPI void   dpAddMSBuildCommand(const char *msbuild_option); // add msbuild command that will be called by auto build thread
+dpAPI void   dpAddBuildCommand(const char *any_command); // add arbitrary command that will be called by auto build thread
+dpAPI bool   dpStartAutoBuild();
 dpAPI bool   dpStopAutoBuild();
-dpAPI void   dpUpdate();
+dpAPI void   dpUpdate(); // reloads and links modified modules.
 
-dpAPI void   dpPrint(const char* fmt, ...);
+dpAPI void          dpPrint(const char* fmt, ...);
+dpAPI bool          dpDemangle(const char *mangled, char *demangled, size_t buflen);
+dpAPI const char*   dpGetVCVars();
 
 #else  // dpDisable
 
@@ -168,11 +184,15 @@ dpAPI void   dpPrint(const char* fmt, ...);
 
 #define dpAddLoadPath(...) 
 #define dpAddSourcePath(...) 
+#define dpAddMSBuildCommand(...) 
+#define dpAddBuildCommand(...) 
 #define dpStartAutoBuild(...) 
 #define dpStopAutoBuild(...) 
 #define dpUpdate(...) 
 
 #define dpPrint(...) 
+#define dpDemangle(...) 
+#define dpGetVCVars(...) 
 
 #endif // dpDisable
 
