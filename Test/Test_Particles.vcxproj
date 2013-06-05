@@ -88,7 +88,7 @@
     <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
     <IncludePath>..;$(DXSDK_DIR)Include;$(IncludePath)</IncludePath>
     <LibraryPath>..;$(DXSDK_DIR)Lib\x86;$(LibraryPath)</LibraryPath>
-    <OutDir>$(SolutionDir)\</OutDir>
+    <OutDir>$(ProjectDir)</OutDir>
     <IntDir>_tmp\$(ProjectName)_$(Platform)$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|X64'">
@@ -97,7 +97,7 @@
     <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x64;$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
     <IncludePath>..;$(DXSDK_DIR)Include;$(IncludePath)</IncludePath>
     <LibraryPath>..;$(DXSDK_DIR)Lib\x64;$(LibraryPath)</LibraryPath>
-    <OutDir>$(SolutionDir)\</OutDir>
+    <OutDir>$(ProjectDir)</OutDir>
     <IntDir>_tmp\$(ProjectName)_$(Platform)$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -106,7 +106,7 @@
     <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
     <IncludePath>..;$(DXSDK_DIR)Include;$(IncludePath)</IncludePath>
     <LibraryPath>..;$(DXSDK_DIR)Lib\x86;$(LibraryPath)</LibraryPath>
-    <OutDir>$(SolutionDir)\</OutDir>
+    <OutDir>$(ProjectDir)</OutDir>
     <IntDir>_tmp\$(ProjectName)_$(Platform)$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|X64'">
@@ -115,7 +115,7 @@
     <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x64;$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
     <IncludePath>..;$(DXSDK_DIR)Include;$(IncludePath)</IncludePath>
     <LibraryPath>..;$(DXSDK_DIR)Lib\x64;$(LibraryPath)</LibraryPath>
-    <OutDir>$(SolutionDir)\</OutDir>
+    <OutDir>$(ProjectDir)</OutDir>
     <IntDir>_tmp\$(ProjectName)_$(Platform)$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile|Win32'">
@@ -124,7 +124,7 @@
     <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
     <IncludePath>..;$(DXSDK_DIR)Include;$(IncludePath)</IncludePath>
     <LibraryPath>..;$(DXSDK_DIR)Lib\x86;$(LibraryPath)</LibraryPath>
-    <OutDir>$(SolutionDir)\</OutDir>
+    <OutDir>$(ProjectDir)</OutDir>
     <IntDir>_tmp\$(ProjectName)_$(Platform)$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Profile|X64'">
@@ -133,7 +133,7 @@
     <ExecutablePath>$(DXSDK_DIR)Utilities\bin\x64;$(DXSDK_DIR)Utilities\bin\x86;$(ExecutablePath)</ExecutablePath>
     <IncludePath>..;$(DXSDK_DIR)Include;$(IncludePath)</IncludePath>
     <LibraryPath>..;$(DXSDK_DIR)Lib\x64;$(LibraryPath)</LibraryPath>
-    <OutDir>$(SolutionDir)\</OutDir>
+    <OutDir>$(ProjectDir)</OutDir>
     <IntDir>_tmp\$(ProjectName)_$(Platform)$(Configuration)\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">

@@ -81,7 +81,7 @@
     <IncludePath>..;$(IncludePath)</IncludePath>
     <LibraryPath>..;$(DXSDK_DIR)lib\x86;$(LibraryPath)</LibraryPath>
     <TargetName>$(ProjectName)</TargetName>
-    <OutDir>$(ProjectDir)\</OutDir>
+    <OutDir>$(ProjectDir)</OutDir>
     <IntDir>_tmp\$(ProjectName)_$(Platform)$(Configuration)\</IntDir>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
@@ -89,7 +89,7 @@
     <IncludePath>..;$(IncludePath)</IncludePath>
     <LibraryPath>..;$(DXSDK_DIR)lib\x86;$(LibraryPath)</LibraryPath>
     <TargetName>$(ProjectName)</TargetName>
-    <OutDir>$(ProjectDir)\</OutDir>
+    <OutDir>$(ProjectDir)</OutDir>
     <IntDir>_tmp\$(ProjectName)_$(Platform)$(Configuration)\</IntDir>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
@@ -97,7 +97,7 @@
     <IncludePath>..;$(IncludePath)</IncludePath>
     <LibraryPath>..;$(DXSDK_DIR)lib\x86;$(LibraryPath)</LibraryPath>
     <TargetName>$(ProjectName)</TargetName>
-    <OutDir>$(ProjectDir)\</OutDir>
+    <OutDir>$(ProjectDir)</OutDir>
     <IntDir>_tmp\$(ProjectName)_$(Platform)$(Configuration)\</IntDir>
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>

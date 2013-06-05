@@ -130,4 +130,3 @@ dpOnLoad(
     }
     ::OutputDebugStringA("dpOnLoad()\n");
 )
-
