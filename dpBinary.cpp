@@ -165,7 +165,7 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
             void *data = (void*)(ImageBase + (int)sect.PointerToRawData + sym->Value);
             if(sym->SectionNumber==IMAGE_SYM_UNDEFINED) { continue; }
             const char *name = dpGetSymbolName(StringTable, sym);
-            if(name[0]!='.') {
+            if(name[0]!='.' && name[0]!='$') {
                 DWORD flags = 0;
                 if((sect.Characteristics&IMAGE_SCN_CNT_CODE))               { flags|=dpE_Code; }
                 if((sect.Characteristics&IMAGE_SCN_CNT_INITIALIZED_DATA))   { flags|=dpE_IData; }
@@ -267,7 +267,13 @@ bool dpObjFile::partialLink(size_t si)
             PIMAGE_RELOCATION pReloc = pRelocation + ri;
             PIMAGE_SYMBOL rsym = pSymbolTable + pReloc->SymbolTableIndex;
             const char *rname = dpGetSymbolName(StringTable, rsym);
-            size_t rdata = (size_t)resolveSymbol(rname);
+            size_t rdata = 0;
+            if(rname[0]=='$') {
+                rdata = (size_t)(ImageBase + (int)pSectionHeader[rsym->SectionNumber-1].PointerToRawData + rsym->Value);
+            }
+            else {
+                rdata = (size_t)resolveSymbol(rname);
+            }
             if(rdata==NULL) {
                 dpPrintError("symbol \"%s\" (referenced by \"%s\") cannot be resolved.\n", rname, m_path.c_str());
                 ret = false;

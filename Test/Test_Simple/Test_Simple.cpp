@@ -70,7 +70,7 @@ dpNoInline void Test_ThisMaybeOverridden()
 
 int main(int argc, char *argv[])
 {
-    dpInitialize();
+    dpInitialize(dpE_LogAll);
     dpAddLoadPath(dpObjDir"/*.obj");
     dpAddSourcePath("Test_Simple");
     dpAddMSBuildCommand("Test_Simple.vcxproj /target:ClCompile /m /p:Configuration="dpConfiguration";Platform="dpPlatform);
@@ -84,9 +84,8 @@ int main(int argc, char *argv[])
         Test test;
         while(!test.getEndFlag()) {
             test.doSomething();
-            Test_ThisMaybeOverridden();
 
-            ::Sleep(3000);
+            ::Sleep(1000);
             dpUpdate();
         }
     }

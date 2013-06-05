@@ -32,20 +32,22 @@ static size_t dpCopyInstructions(void *dst, void *src, size_t minlen)
             //if(pins->Type == ITYPE_BRANCHCC) break;
             //if(pins->Type == ITYPE_CALL	) break;
             //if(pins->Type == ITYPE_CALLCC	) break;
-            /*
+
+            switch(pLoc[0]) {
             // call & jmp
             case 0xE8:
             case 0xE9:
                 {
-                    can_memcpy = false;
-                    int rva = *(int*)(src+1);
-                    dst[ret] = src[ret];
-                    *(DWORD*)(dst+ret+1) = (ptrdiff_t)(src+ret+rva)-(ptrdiff_t)(dst+ret);
-                    ret += 5;
+                    int rva = *(int*)(pLoc+1);
+                    pDst[0] = pLoc[0];
+                    *(DWORD*)(pDst+1) = (DWORD)((ptrdiff_t)(pLoc+rva)-(ptrdiff_t)(pDst));
                 }
-            */
+                break;
+            default:
+                memcpy(pDst, pLoc, pins->Length);
+                break;
+            }
 
-            memcpy(pDst, pLoc, pins->Length);
             len  += pins->Length;
             pLoc += pins->Length;
             pDst += pins->Length;
