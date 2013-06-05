@@ -444,6 +444,7 @@ public:
     void addLoadPath(const char *path);
     void addSourcePath(const char *path);
     void addMSBuildCommand(const char *msbuild_options);
+    void addCLBuildCommand(const char *cl_options);
     void addBuildCommand(const char *any_command);
     bool startAutoBuild();
     bool stopAutoBuild();
@@ -464,7 +465,6 @@ private:
 
     dpContext *m_context;
     std::string m_vcvars;
-    std::string m_msbuild;
     std::vector<std::string> m_build_commands;
     std::vector<SourcePath>  m_srcpathes;
     std::vector<std::string> m_loadpathes;

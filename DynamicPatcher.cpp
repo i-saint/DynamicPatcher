@@ -70,10 +70,9 @@ dpAPI bool dpInitialize(const dpConfig &conf)
             if(!cf.source_paths.empty() && (!cf.msbuild_commands.empty() || !cf.build_commands.empty())) {
                 dpStartAutoBuild();
             }
-
-            if((g_dpConfig.sys_flags & dpE_SysOpenConsole)!=0) {
-                ::AllocConsole();
-            }
+        }
+        if((g_dpConfig.sys_flags & dpE_SysOpenConsole)!=0) {
+            ::AllocConsole();
         }
 
         return true;
@@ -152,11 +151,15 @@ dpAPI void dpAddSourcePath(const char *path)
 {
     dpGetCurrentContext()->getBuilder()->addSourcePath(path);
 }
+
 dpAPI void dpAddMSBuildCommand(const char *msbuild_option)
 {
     dpGetCurrentContext()->getBuilder()->addMSBuildCommand(msbuild_option);
 }
-
+dpAPI void dpAddCLBuildCommand(const char *cl_option)
+{
+    dpGetCurrentContext()->getBuilder()->addCLBuildCommand(cl_option);
+}
 dpAPI void dpAddBuildCommand(const char *any_command)
 {
     dpGetCurrentContext()->getBuilder()->addBuildCommand(any_command);

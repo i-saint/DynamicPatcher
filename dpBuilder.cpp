@@ -39,9 +39,6 @@ dpBuilder::dpBuilder(dpContext *ctx)
 #else // _WIN64
         m_vcvars += " x86";
 #endif // _WIN64
-        m_msbuild = m_vcvars;
-        m_msbuild += " && ";
-        m_msbuild += "msbuild";
     }
     ::RegCloseKey( key );
 }
@@ -75,7 +72,20 @@ void dpBuilder::addSourcePath(const char *path)
 
 void dpBuilder::addMSBuildCommand(const char *msbuild_options)
 {
-    m_build_commands.push_back(m_msbuild+' '+msbuild_options+" /nologo");
+    std::string cmd = m_vcvars;
+    cmd += " && msbuild ";
+    cmd += msbuild_options;
+    cmd += " /nologo";
+    m_build_commands.push_back(cmd);
+}
+
+void dpBuilder::addCLBuildCommand(const char *cl_options)
+{
+    std::string cmd = m_vcvars;
+    cmd += " && cl ";
+    cmd += cl_options;
+    cmd += " /nologo";
+    m_build_commands.push_back(cmd);
 }
 
 void dpBuilder::addBuildCommand(const char *any_command)
