@@ -1,4 +1,3 @@
-target_process: "Test_Injected.exe"
 load: "_tmp\Test_Inject_Win32Debug\Test_Inject.obj"
 source path: "Test_Injected"
 msbuild command: "Test_Injected.vcxproj /target:ClCompile /m /p:Configuration=Debug;Platform=Win32"

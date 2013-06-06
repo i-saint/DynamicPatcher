@@ -1,6 +1,6 @@
 ﻿// created by i-saint
 // distributed under Creative Commons Attribution (CC BY) license.
-// https://github.com/i-saint/DynamicObjLoader
+// https://github.com/i-saint/DynamicPatcher
 
 #pragma warning( disable : 4996 ) // _s じゃない CRT 関数使うと出るやつ
 
