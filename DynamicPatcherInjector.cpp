@@ -82,7 +82,10 @@ bool TryInject(const char *process_name, const char *dllname)
 
 int main(int argc, char *argv[])
 {
-    if(argc<2) { printf("usage: DynamicPatcherInjector target_process_name.exe config_file_path.dpconf(optional)\n"); }
+    if(argc<2) {
+        printf("usage: DynamicPatcherInjector [target_proces.exe] [config_file.dpconf(optional)]\n");
+        return 1;
+    }
 
     bool ok = true;
     if(argc>=3) { ok=g_option.load(argv[2]) ;}
