@@ -214,7 +214,6 @@ struct dpConfigFile
     std::vector<std::string> module_paths;
     std::vector<std::string> msbuild_commands;
     std::vector<std::string> build_commands;
-    std::string target_process;
     std::string config_path;
 
     dpConfigFile();

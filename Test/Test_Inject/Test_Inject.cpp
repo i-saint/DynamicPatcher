@@ -4,6 +4,7 @@
 
 #include <cstdio>
 
+#define dpNoLib
 #include "DynamicPatcher.h"
 
 #ifdef _M_X64

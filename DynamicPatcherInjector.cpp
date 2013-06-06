@@ -67,7 +67,7 @@ bool TryInject(const char *process_name, const char *dllname)
             ::GetModuleBaseNameA(hProcess, hMod, szProcessName, sizeof(szProcessName)/sizeof(TCHAR));
             if( strstr(szProcessName, process_name)!=NULL) {
                 if(InjectDLL(hProcess, dll_fullpath)) {
-                    printf("injection completed %s -> %s\n", process_name, dllname);
+                    printf("injection complete: %s -> %s\n", dllname, process_name);
                     fflush(stdout);
                     return true;
                 }
@@ -80,24 +80,30 @@ bool TryInject(const char *process_name, const char *dllname)
 }
 
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE prev, LPWSTR cmd, int show)
+int main(int argc, char *argv[])
 {
-    bool ok = true;
-    if(__argc>=2) { ok=g_option.load(__wargv[1]) ;}
-    else          { ok=g_option.load(); }
-    if(!ok) { return 1; }
+    if(argc<2) { printf("usage: DynamicPatcherInjector target_process_name.exe config_file_path.dpconf(optional)\n"); }
 
+    bool ok = true;
+    if(argc>=3) { ok=g_option.load(argv[2]) ;}
+    else        { ok=g_option.load(); }
+    if(!ok) {
+        printf("config file could not read.\n");
+        return 1;
+    }
+
+    const char *target_process = argv[1];
     char exe_path[MAX_PATH];
     std::string exe_dir;
-    if(TryInject(g_option.target_process.c_str(), (exe_dir+PatcherDLL).c_str())) {
+    dpGetMainModulePath(exe_path, _countof(exe_path));
+    dpSeparateDirFile(exe_path, &exe_dir, nullptr);
+
+    if(TryInject(target_process, (exe_dir+PatcherDLL).c_str())) {
         std::string conf_path;
-        dpSeparateFileExt(g_option.target_process.c_str(), &conf_path, nullptr);
+        dpSeparateFileExt(target_process, &conf_path, nullptr);
         conf_path += "dpconf";
         g_option.copy(conf_path.c_str());
-
-        dpGetMainModulePath(exe_path, _countof(exe_path));
-        dpSeparateDirFile(exe_path, &exe_dir, nullptr);
-        TryInject(g_option.target_process.c_str(), (exe_dir+InjectorDLL).c_str());
+        TryInject(target_process, (exe_dir+InjectorDLL).c_str());
     }
     return 0;
 }

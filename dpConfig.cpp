@@ -53,7 +53,6 @@ bool dpConfigFile::load(const char *path)
         int iv;
         while(fgets(line, _countof(line), f)) {
             if(line[0]=='/') { continue; }
-            if     (sscanf(line, "target_process: \"%[^\"]\"", opt))    { target_process=opt; }
             else if(sscanf(line, "log flags: %x", &iv))                 { log_flags=iv; }
             else if(sscanf(line, "sys flags: %x", &iv))                 { sys_flags=iv; }
             else if(sscanf(line, "vc ver: %d", &iv))                    { vc_ver=iv; }
