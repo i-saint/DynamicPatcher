@@ -13,10 +13,8 @@
 
 #ifdef _M_X64
 #   define dpLibArch "64"
-#   define dpSymPrefix
 #else // _M_X64
 #   define dpLibArch 
-#   define dpSymPrefix "_"
 #endif //_M_X64
 #ifdef _DEBUG
 #   define dpLibConfig "d"
@@ -27,12 +25,12 @@
 
 #if defined(dpDLLImpl)
 #   define dpAPI dpDLLExport
-#elif defined(dpLinkDynamic)
-#   define dpAPI dpDLLImport
-#   pragma comment(lib,"DynamicPatcher" dpLibArch ".lib")
 #elif defined(dpLinkStatic)
 #   define dpAPI
 #   pragma comment(lib,"DynamicPatchers" dpLibConfig dpLibArch ".lib")
+#elif !defined(dpNoLib)
+#   define dpAPI dpDLLImport
+#   pragma comment(lib,"DynamicPatcher" dpLibArch ".lib")
 #else
 #   define dpAPI
 #endif // dpDLL_Impl
@@ -139,7 +137,7 @@ dpAPI bool   dpPatchByAddress(void *hook_addr); // patches the host symbol that 
 dpAPI bool   dpUnpatchByAddress(void *target_or_hook_addr);
 dpAPI void*  dpGetUnpatched(void *target_or_hook_addr);
 
-dpAPI void   dpAddLoadPath(const char *path); // accepts wildcard. affects auto build and dpReload()
+dpAPI void   dpAddModulePath(const char *path); // accepts wildcard. affects auto build and dpReload()
 dpAPI void   dpAddSourcePath(const char *path); // 
 dpAPI void   dpAddMSBuildCommand(const char *msbuild_option); // add msbuild command that will be called by auto build thread
 dpAPI void   dpAddCLBuildCommand(const char *cl_option); // add cl command that will be called by auto build thread
@@ -150,7 +148,7 @@ dpAPI void   dpUpdate(); // reloads and links modified modules.
 
 dpAPI void          dpPrint(const char* fmt, ...);
 dpAPI bool          dpDemangle(const char *mangled, char *demangled, size_t buflen);
-dpAPI const char*   dpGetVCVars();
+dpAPI const char*   dpGetVCVarsPath();
 
 #else  // dpDisable
 
@@ -183,7 +181,7 @@ dpAPI const char*   dpGetVCVars();
 #define dpUnpatchByAddress(...)
 #define dpGetUnpatched(...) 
 
-#define dpAddLoadPath(...) 
+#define dpAddModulePath(...) 
 #define dpAddSourcePath(...) 
 #define dpAddMSBuildCommand(...) 
 #define dpAddCLBuildCommand(...) 
@@ -194,7 +192,7 @@ dpAPI const char*   dpGetVCVars();
 
 #define dpPrint(...) 
 #define dpDemangle(...) 
-#define dpGetVCVars(...) 
+#define dpGetVCVarsPath(...) 
 
 #endif // dpDisable
 

@@ -59,7 +59,7 @@ bool dpConfigFile::load(const char *path)
             else if(sscanf(line, "vc ver: %d", &iv))                    { vc_ver=iv; }
             else if(sscanf(line, "load: \"%[^\"]\"", opt))              { loads.push_back(opt); }
             else if(sscanf(line, "source path: \"%[^\"]\"", opt))       { source_paths.push_back(opt); }
-            else if(sscanf(line, "load path: \"%[^\"]\"", opt))         { load_paths.push_back(opt); }
+            else if(sscanf(line, "module path: \"%[^\"]\"", opt))       { module_paths.push_back(opt); }
             else if(sscanf(line, "msbuild command: \"%[^\"]\"", opt))   { msbuild_commands.push_back(opt); }
             else if(sscanf(line, "build command: \"%[^\"]\"", opt))     { build_commands.push_back(opt); }
         }

@@ -46,8 +46,8 @@ int main(int argc, char *argv[])
     dpScope(g_dp_context=dpCreateContext());
     dpSetCurrentContext(g_dp_context);
 
-    dpAddLoadPath("Test_Dll.dll");
-    dpAddLoadPath("Test_Lib.lib");
+    dpAddModulePath("Test_Dll.dll");
+    dpAddModulePath("Test_Lib.lib");
     dpAddSourcePath("Test_LibDll");
     dpAddMSBuildCommand("Test_Lib.vcxproj /target:Build /m /p:Configuration="dpConfiguration";Platform="dpPlatform);
     dpAddMSBuildCommand("Test_Dll.vcxproj /target:Build /m /p:Configuration="dpConfiguration";Platform="dpPlatform);

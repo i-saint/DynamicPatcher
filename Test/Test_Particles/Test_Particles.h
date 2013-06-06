@@ -8,7 +8,6 @@
 #include <d3dcompiler.h>
 #include <xnamath.h>
 #include <cstdio>
-#define dpLinkDynamic
 #include "DynamicPatcher.h"
 
 #define MAX_PARTICLES 6144

@@ -211,7 +211,7 @@ struct dpConfigFile
     int vc_ver;
     std::vector<std::string> loads;
     std::vector<std::string> source_paths;
-    std::vector<std::string> load_paths;
+    std::vector<std::string> module_paths;
     std::vector<std::string> msbuild_commands;
     std::vector<std::string> build_commands;
     std::string target_process;
@@ -441,7 +441,7 @@ class dpBuilder
 public:
     dpBuilder(dpContext *ctx);
     ~dpBuilder();
-    void addLoadPath(const char *path);
+    void addModulePath(const char *path);
     void addSourcePath(const char *path);
     void addMSBuildCommand(const char *msbuild_options);
     void addCLBuildCommand(const char *cl_options);
@@ -454,7 +454,7 @@ public:
     void   watchFiles();
     bool   build();
 
-    const char* getVCVars() const;
+    const char* getVCVarsPath() const;
 
 private:
     struct SourcePath

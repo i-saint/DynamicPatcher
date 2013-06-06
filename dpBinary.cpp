@@ -6,6 +6,11 @@
 #include "dpInternal.h"
 #include <regex>
 
+#ifdef _M_X64
+#   define dpSymPrefix
+#else // _M_X64
+#   define dpSymPrefix "_"
+#endif //_M_X64
 
 typedef unsigned long long QWORD;
 const char g_symname_onload[]   = dpSymPrefix "dpOnLoadHandler";

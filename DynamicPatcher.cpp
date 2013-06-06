@@ -64,7 +64,7 @@ dpAPI bool dpInitialize(const dpConfig &conf)
             }
             dpEach(cf.loads,            [](const std::string &v){ dpLoad(v.c_str()); });
             dpEach(cf.source_paths,     [](const std::string &v){ dpAddSourcePath(v.c_str()); });
-            dpEach(cf.load_paths,       [](const std::string &v){ dpAddLoadPath(v.c_str()); });
+            dpEach(cf.module_paths,       [](const std::string &v){ dpAddModulePath(v.c_str()); });
             dpEach(cf.msbuild_commands, [](const std::string &v){ dpAddMSBuildCommand(v.c_str()); });
             dpEach(cf.build_commands,   [](const std::string &v){ dpAddBuildCommand(v.c_str()); });
             if(!cf.source_paths.empty() && (!cf.msbuild_commands.empty() || !cf.build_commands.empty())) {
@@ -142,9 +142,9 @@ dpAPI void* dpGetUnpatched(void *target_or_hook_addr)
 }
 
 
-dpAPI void dpAddLoadPath(const char *path)
+dpAPI void dpAddModulePath(const char *path)
 {
-    dpGetCurrentContext()->getBuilder()->addLoadPath(path);
+    dpGetCurrentContext()->getBuilder()->addModulePath(path);
 }
 
 dpAPI void dpAddSourcePath(const char *path)
@@ -180,7 +180,7 @@ dpAPI void dpUpdate()
     dpGetCurrentContext()->getBuilder()->update();
 }
 
-dpAPI const char* dpGetVCVars()
+dpAPI const char* dpGetVCVarsPath()
 {
-    return dpGetCurrentContext()->getBuilder()->getVCVars();
+    return dpGetCurrentContext()->getBuilder()->getVCVarsPath();
 }

@@ -11,7 +11,6 @@
 
 //#define dpDisable
 //#define dpLinkStatic
-#define dpLinkDynamic
 #include "DynamicPatcher.h"
 
 #ifdef _M_X64
@@ -71,7 +70,7 @@ dpNoInline void Test_ThisMaybeOverridden()
 int main(int argc, char *argv[])
 {
     dpInitialize(dpE_LogAll);
-    dpAddLoadPath(dpObjDir"/*.obj");
+    dpAddModulePath(dpObjDir"/*.obj");
     dpAddSourcePath("Test_Simple");
     dpAddMSBuildCommand("Test_Simple.vcxproj /target:ClCompile /m /p:Configuration="dpConfiguration";Platform="dpPlatform);
     dpStartAutoBuild();

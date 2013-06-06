@@ -48,7 +48,7 @@ dpBuilder::~dpBuilder()
     stopAutoBuild();
 }
 
-void dpBuilder::addLoadPath(const char *path)
+void dpBuilder::addModulePath(const char *path)
 {
     std::string tmp = path;
     auto p = dpFind(m_loadpathes, [&](const std::string &s){return s==tmp;});
@@ -222,7 +222,7 @@ size_t dpBuilder::reload()
     return n;
 }
 
-const char* dpBuilder::getVCVars() const
+const char* dpBuilder::getVCVarsPath() const
 {
     return m_vcvars.c_str();
 }

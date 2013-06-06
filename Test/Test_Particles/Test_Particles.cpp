@@ -657,7 +657,7 @@ void Render()
 int WINAPI wWinMain( HINSTANCE hInstance, HINSTANCE /*hPrevInstance*/, LPWSTR /*lpCmdLine*/, int nCmdShow )
 {
     dpInitialize(dpConfig(dpE_LogAll, dpE_SysDefault|dpE_SysOpenConsole));
-    dpAddLoadPath(dpObjDir"/Test_ParticlesObj.obj");
+    dpAddModulePath(dpObjDir"/Test_ParticlesObj.obj");
     dpAddSourcePath("Test_Particles");
     dpAddMSBuildCommand("Test_Particles.vcxproj /target:ClCompile /m /p:Configuration="dpConfiguration";Platform="dpPlatform);
     dpStartAutoBuild();

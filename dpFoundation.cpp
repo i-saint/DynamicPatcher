@@ -248,13 +248,13 @@ size_t dpGetCurrentModulePath(char *buf, size_t buflen)
 {
     HMODULE mod = 0;
     ::GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCSTR)&dpGetCurrentModulePath, &mod);
-    return ::GetModuleFileNameA(mod, buf, buflen);
+    return ::GetModuleFileNameA(mod, buf, (DWORD)buflen);
 }
 
 size_t dpGetMainModulePath(char *buf, size_t buflen)
 {
     HMODULE mod = ::GetModuleHandleA(nullptr);
-    return ::GetModuleFileNameA(mod, buf, buflen);
+    return ::GetModuleFileNameA(mod, buf, (DWORD)buflen);
 }
 
 void dpSanitizePath(std::string &path)

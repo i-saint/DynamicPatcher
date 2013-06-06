@@ -34,7 +34,7 @@ dpNoInline void Test_ThisMaybeOverridden()
 dpOnLoad(
     dpPrint("loaded: Test_Inject.cpp\n");
 
-    dpAddLoadPath(dpObjDir"/*.obj");
+    dpAddModulePath(dpObjDir"/*.obj");
     dpAddSourcePath("Test_Inject");
     dpAddMSBuildCommand("Test_Inject.vcxproj /target:ClCompile /m /p:Configuration="dpConfiguration";Platform="dpPlatform);
     dpStartAutoBuild();
