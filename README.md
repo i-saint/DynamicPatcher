@@ -4,7 +4,7 @@ Runtime C++ Editing library.
 compile .cpps, load and link .objs (or .libs, .dlls), and update functions at runtime.  
 
 ##demo movie  
-[![IMAGE ALT TEXT HERE](http://img.youtube.com/vi/rL1LZjrhJbw/0.jpg)](http://www.youtube.com/watch?v=rL1LZjrhJbw)
+[![DynamicPatcher demo](http://img.youtube.com/vi/rL1LZjrhJbw/0.jpg)](http://www.youtube.com/watch?v=rL1LZjrhJbw)
 
 
 ##detaild description
@@ -64,3 +64,12 @@ int main()
 
 // cl /Zi example.cpp && ./example
 ```
+
+##license
+<img src="http://mirrors.creativecommons.org/presskit/buttons/88x31/png/by.png" alt="CC BY" width="200" height="70" />
+
+##thanks
+[Runtime-Compiled C++](http://runtimecompiledcplusplus.blogspot.com/)  
+[Mhook](http://codefromthe70s.org/mhook23.aspx)  
+[PE/COFF file format](http://www.skyfree.org/linux/references/coff.pdf)  
+[lib file format](http://hp.vector.co.jp/authors/VA050396/tech_04.html)  
