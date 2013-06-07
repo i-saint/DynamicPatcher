@@ -1,6 +1,66 @@
-DynamicObjLoader
+DynamicPatcher
 ================
+Runtime C++ Editing library.  
+compile .cpps, load and link .objs (or .libs, .dlls), and update functions at runtime.  
 
-.obj を実行時にロードしてリンクして実行できるようにする代物  
-demo: http://www.youtube.com/watch?v=y6t42w8w2t0&hd=1  
-実装の詳細: http://i-saint.hatenablog.com/entry/2012/09/04/223007 http://i-saint.hatenablog.com/entry/2012/09/24/055849
+##demo movie  
+[![IMAGE ALT TEXT HERE](http://img.youtube.com/vi/rL1LZjrhJbw/0.jpg)](http://www.youtube.com/watch?v=rL1LZjrhJbw)
+
+
+##detaild description
+(japanese) http://i-saint.hatenablog.com/entry/2013/06/06/212515
+
+
+##simple example
+```c++
+#include <windows.h> // Sleep()
+#include <cstdio>
+#include "DynamicPatcher.h"
+
+// dpPatch をつけておくとロード時に同名の関数を自動的に更新する。
+// (dpPatch は単なる dllexport。.obj に情報が残るいい指定方法が他に見当たらなかったので仕方なく…。
+//  この自動ロードは dpInitialize() のオプションで切ることも可能)
+dpPatch void MaybeOverridden()
+{
+    // ここを書き換えるとリアルタイムに挙動が変わる
+    puts("MaybeOverridden()\n");
+}
+
+// CRT の関数を差し替える例。今回の犠牲者は puts()
+int puts_hook(const char *s)
+{
+    typedef int (*puts_t)(const char *s);
+    puts_t orig_puts = (puts_t)dpGetUnpatched(&puts); // hook 前の関数を取得
+    orig_puts("puts_hook()");
+    return orig_puts(s);
+}
+
+// dpOnLoad() の中身はロード時に自動的に実行される。アンロード時に実行される dpOnUnload() も記述可能
+dpOnLoad(
+    // dpPatch による自動差し替えを使わない場合、on load 時とかに手動で差し替える必要がある。
+    // 元関数と新しい関数の名前が違うケースでは手動指定するしかない。
+    dpPatchAddressToAddress(&puts, &puts_hook); // puts() を puts_hook() に差し替える
+)
+
+int main()
+{
+    dpInitialize();
+    dpAddSourcePath("."); // このディレクトリのファイルに変更があったらビルドコマンドを呼ぶ
+    dpAddModulePath("example.obj"); // ビルドが終わったらこのファイルをロードする
+    // cl.exe でコンパイル。msbuild や任意のコマンドも指定可能。
+    // 実運用の際は msbuild を使うか、自動ビルドは使用せすユーザー制御になると思われる。
+    // (dpStartAutoBuild() を呼ばなかった場合、dpUpdate() はロード済み or module path にあるモジュールに更新があればそれをリロードする)
+    dpAddCLBuildCommand("example.cpp /c /Zi");
+    dpStartAutoBuild(); // 自動ビルド開始
+
+    for(;;) {
+        MaybeOverridden();
+        ::Sleep(2000);
+        dpUpdate();
+    }
+
+    dpFinalize();
+}
+
+// cl /Zi example.cpp && ./example
+```
