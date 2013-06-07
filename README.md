@@ -7,11 +7,11 @@ compile .cpps, load and link .objs (or .libs, .dlls), and update functions at ru
 [![DynamicPatcher demo](http://img.youtube.com/vi/rL1LZjrhJbw/0.jpg)](http://www.youtube.com/watch?v=rL1LZjrhJbw)
 
 
-##detaild description
+##detailed description
 (japanese) http://i-saint.hatenablog.com/entry/2013/06/06/212515
 
 
-##simple example
+##example
 ```c++
 #include <windows.h> // Sleep()
 #include <cstdio>
