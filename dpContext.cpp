@@ -15,6 +15,8 @@ dpContext::dpContext()
 
 dpContext::~dpContext()
 {
+    m_builder->stopAutoBuild();
+    m_builder->stopPreload();
     // バイナリ unload 時に適切に unpatch するには patcher より先に loader を破棄する必要がある
     delete m_loader;  m_loader=nullptr;
     delete m_patcher; m_patcher=nullptr;
