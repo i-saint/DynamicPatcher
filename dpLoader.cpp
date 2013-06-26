@@ -79,6 +79,8 @@ void dpLoader::addOnLoadList(dpBinary *bin)
 template<class BinaryType>
 BinaryType* dpLoader::loadBinaryImpl(const char *path)
 {
+    dpBuilder::ScopedPreloadLock pl(dpGetBuilder());
+
     BinaryType *old = static_cast<BinaryType*>(findBinary(path));
     if(old) {
         dpTime t = dpGetMTime(path);
@@ -89,6 +91,7 @@ BinaryType* dpLoader::loadBinaryImpl(const char *path)
     if(ret->loadFile(path)) {
         if(old) { unloadImpl(old); }
         m_binaries.push_back(ret);
+        addOnLoadList(ret);
         dpPrintInfo("loaded \"%s\"\n", ret->getPath());
     }
     else {
@@ -142,6 +145,8 @@ size_t dpLoader::reload()
 
 bool dpLoader::link()
 {
+    dpBuilder::ScopedPreloadLock pl(dpGetBuilder());
+
     if(m_onload_queue.empty()) {
         return true;
     }

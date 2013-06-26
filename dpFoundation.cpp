@@ -6,6 +6,14 @@
 #include "dpInternal.h"
 #pragma comment(lib, "dbghelp.lib")
 
+dpMutex::ScopedLock::ScopedLock(dpMutex &v) : mutex(v) { mutex.lock(); }
+dpMutex::ScopedLock::~ScopedLock() { mutex.unlock(); }
+dpMutex::dpMutex() { ::InitializeCriticalSection(&m_cs); }
+dpMutex::~dpMutex() { ::DeleteCriticalSection(&m_cs); }
+void dpMutex::lock() { ::EnterCriticalSection(&m_cs); }
+void dpMutex::unlock() { ::LeaveCriticalSection(&m_cs); }
+
+
 template<size_t N>
 inline int dpVSprintf(char (&buf)[N], const char *format, va_list vl)
 {

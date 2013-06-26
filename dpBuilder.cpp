@@ -11,6 +11,8 @@ dpBuilder::dpBuilder(dpContext *ctx)
     , m_build_done(false)
     , m_watchfile_stop(false)
     , m_thread_autobuild(nullptr)
+    , m_thread_preload(nullptr)
+    , m_preload_stop(false)
 {
     std::string VCVersion;
     switch(dpGetConfig().vc_ver) {
@@ -46,6 +48,7 @@ dpBuilder::dpBuilder(dpContext *ctx)
 dpBuilder::~dpBuilder()
 {
     stopAutoBuild();
+    stopPreload();
 }
 
 void dpBuilder::addModulePath(const char *path)
@@ -68,6 +71,16 @@ void dpBuilder::addSourcePath(const char *path)
 
     auto p = dpFind(m_srcpathes, [&](const SourcePath &s){return s.path==tmp.path;});
     if(p==m_srcpathes.end()) { m_srcpathes.push_back(tmp); }
+}
+
+void dpBuilder::addPreloadPath( const char *path )
+{
+    std::string tmp = path;
+    auto p = dpFind(m_preloadpathes, [&](const std::string &s){return s==tmp;});
+    if(p==m_preloadpathes.end()) {
+        std::string s=tmp; dpSanitizePath(s);
+        m_preloadpathes.push_back(s);
+    }
 }
 
 void dpBuilder::addMSBuildCommand(const char *msbuild_options)
@@ -221,6 +234,62 @@ size_t dpBuilder::reload()
     dpGetLoader()->link();
     return n;
 }
+
+
+static void Preload( LPVOID arg )
+{
+    ((dpBuilder*)arg)->preload();
+}
+
+void dpBuilder::preload()
+{
+    for(size_t pi=0; pi<m_preloadpathes.size(); ++pi) {
+        dpGlob(m_preloadpathes[pi].c_str(), [&](const std::string &path){
+            if(m_preload_stop) { return; }
+
+            dpObjFile *obj = new dpObjFile(m_context);
+            if(obj->loadFile(path.c_str())) {
+                dpPrintInfo("preload begin %s\n", path.c_str());
+                obj->eachSymbols([&](dpSymbol *sym){
+                    if(m_preload_stop) { return; }
+                    if(dpIsExportFunction(sym->flags)) {
+                        dpMutex::ScopedLock lock(m_mtx_preload);
+                        sym->partialLink();
+                        dpGetLoader()->findHostSymbolByName(sym->name);
+                    }
+                });
+                dpPrintInfo("preload end %s\n", path.c_str());
+            }
+            delete obj;
+        });
+    }
+}
+
+bool dpBuilder::startPreload()
+{
+    if(!m_thread_preload) {
+        m_thread_preload = (HANDLE)_beginthread( Preload, 0, this );
+        dpPrintInfo("preload thread started\n");
+        return true;
+    }
+    return false;
+}
+
+bool dpBuilder::stopPreload()
+{
+    if(m_thread_preload) {
+        m_preload_stop = true;
+        ::WaitForSingleObject(m_thread_preload, INFINITE);
+        m_thread_preload = nullptr;
+        dpPrintInfo("preload thread stopped\n");
+        return true;
+    }
+    return false;
+}
+
+void dpBuilder::lockPreload()   { m_mtx_preload.lock(); }
+void dpBuilder::unlockPreload() { m_mtx_preload.unlock(); }
+
 
 const char* dpBuilder::getVCVarsPath() const
 {

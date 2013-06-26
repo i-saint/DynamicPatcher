@@ -139,11 +139,14 @@ dpAPI void*  dpGetUnpatched(void *target_or_hook_addr);
 
 dpAPI void   dpAddModulePath(const char *path); // accepts wildcard. affects auto build and dpReload()
 dpAPI void   dpAddSourcePath(const char *path); // 
+dpAPI void   dpAddPreloadPath(const char *path); // 
 dpAPI void   dpAddMSBuildCommand(const char *msbuild_option); // add msbuild command that will be called by auto build thread
 dpAPI void   dpAddCLBuildCommand(const char *cl_option); // add cl command that will be called by auto build thread
 dpAPI void   dpAddBuildCommand(const char *any_command); // add arbitrary command that will be called by auto build thread
 dpAPI bool   dpStartAutoBuild();
 dpAPI bool   dpStopAutoBuild();
+dpAPI bool   dpStartPreload();
+dpAPI bool   dpStopPreload();
 dpAPI void   dpUpdate(); // reloads and links modified modules.
 
 dpAPI void          dpPrint(const char* fmt, ...);
@@ -183,11 +186,14 @@ dpAPI const char*   dpGetVCVarsPath();
 
 #define dpAddModulePath(...) 
 #define dpAddSourcePath(...) 
+#define dpAddPreloadPath(...) 
 #define dpAddMSBuildCommand(...) 
 #define dpAddCLBuildCommand(...) 
 #define dpAddBuildCommand(...) 
 #define dpStartAutoBuild(...) 
 #define dpStopAutoBuild(...) 
+#define dpStartPreload(...) 
+#define dpStopPreload(...) 
 #define dpUpdate(...) 
 
 #define dpPrint(...) 

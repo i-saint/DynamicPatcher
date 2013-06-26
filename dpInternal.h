@@ -88,6 +88,24 @@ inline bool operator==(const dpPatchData &a, const dpPatchData &b) { return a.ta
 template<class Container, class F> inline void dpEach(Container &cont, const F &f);
 template<class Container, class F> inline auto dpFind(Container &cont, const F &f) -> decltype(cont.begin());
 
+class dpMutex
+{
+public:
+    class ScopedLock
+    {
+    public:
+        ScopedLock(dpMutex &v);
+        ~ScopedLock();
+        dpMutex &mutex;
+    };
+    dpMutex();
+    ~dpMutex();
+    void lock();
+    void unlock();
+private:
+    CRITICAL_SECTION m_cs;
+};
+
 dpConfig& dpGetConfig();
 void    dpPrintError(const char* fmt, ...);
 void    dpPrintWarning(const char* fmt, ...);
@@ -212,6 +230,7 @@ struct dpConfigFile
     std::vector<std::string> loads;
     std::vector<std::string> source_paths;
     std::vector<std::string> module_paths;
+    std::vector<std::string> preload_paths;
     std::vector<std::string> msbuild_commands;
     std::vector<std::string> build_commands;
     std::string config_path;
@@ -438,20 +457,34 @@ private:
 class dpBuilder
 {
 public:
+    class ScopedPreloadLock
+    {
+    public:
+        ScopedPreloadLock(dpBuilder *v) : m_builder(v) { m_builder->lockPreload(); }
+        ~ScopedPreloadLock() { m_builder->unlockPreload(); }
+        dpBuilder *m_builder;
+    };
+
     dpBuilder(dpContext *ctx);
     ~dpBuilder();
     void addModulePath(const char *path);
     void addSourcePath(const char *path);
+    void addPreloadPath(const char *path);
     void addMSBuildCommand(const char *msbuild_options);
     void addCLBuildCommand(const char *cl_options);
     void addBuildCommand(const char *any_command);
     bool startAutoBuild();
     bool stopAutoBuild();
+    bool startPreload();
+    bool stopPreload();
+    void lockPreload();
+    void unlockPreload();
 
     void   update();
     size_t reload();
     void   watchFiles();
     bool   build();
+    void   preload();
 
     const char* getVCVarsPath() const;
 
@@ -467,9 +500,13 @@ private:
     std::vector<std::string> m_build_commands;
     std::vector<SourcePath>  m_srcpathes;
     std::vector<std::string> m_loadpathes;
+    std::vector<std::string> m_preloadpathes;
     mutable bool m_build_done;
     bool m_watchfile_stop;
     HANDLE m_thread_autobuild;
+    HANDLE m_thread_preload;
+    bool m_preload_stop;
+    dpMutex m_mtx_preload;
 };
 
 

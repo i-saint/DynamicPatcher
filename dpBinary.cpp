@@ -213,8 +213,6 @@ bool dpObjFile::loadMemory(const char *path, void *data, size_t size, dpTime mti
     }
     if(dpSymbol *s=getSymbolTable().findSymbolByName(g_symname_onload))   { s->flags |= dpE_Handler; }
     if(dpSymbol *s=getSymbolTable().findSymbolByName(g_symname_onunload)) { s->flags |= dpE_Handler; }
-
-    dpGetLoader()->addOnLoadList(this);
     return true;
 }
 
@@ -664,7 +662,6 @@ bool dpDllFile::loadMemory(const char *path, void *data, size_t /*datasize*/, dp
         m_symbols.addSymbol(dpGetLoader()->newSymbol(name, sym, dpE_Code|dpE_Read|dpE_Execute|dpE_Export, 0, this));
     });
     m_symbols.sort();
-    dpGetLoader()->addOnLoadList(this);
     return true;
 }
 

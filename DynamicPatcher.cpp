@@ -64,11 +64,15 @@ dpAPI bool dpInitialize(const dpConfig &conf)
             }
             dpEach(cf.loads,            [](const std::string &v){ dpLoad(v.c_str()); });
             dpEach(cf.source_paths,     [](const std::string &v){ dpAddSourcePath(v.c_str()); });
-            dpEach(cf.module_paths,       [](const std::string &v){ dpAddModulePath(v.c_str()); });
+            dpEach(cf.module_paths,     [](const std::string &v){ dpAddModulePath(v.c_str()); });
+            dpEach(cf.preload_paths,    [](const std::string &v){ dpAddPreloadPath(v.c_str()); });
             dpEach(cf.msbuild_commands, [](const std::string &v){ dpAddMSBuildCommand(v.c_str()); });
             dpEach(cf.build_commands,   [](const std::string &v){ dpAddBuildCommand(v.c_str()); });
             if(!cf.source_paths.empty() && (!cf.msbuild_commands.empty() || !cf.build_commands.empty())) {
                 dpStartAutoBuild();
+            }
+            if(!cf.preload_paths.empty()) {
+                dpStartPreload();
             }
         }
         if((g_dpConfig.sys_flags & dpE_SysOpenConsole)!=0) {
@@ -152,6 +156,11 @@ dpAPI void dpAddSourcePath(const char *path)
     dpGetCurrentContext()->getBuilder()->addSourcePath(path);
 }
 
+dpAPI void dpAddPreloadPath(const char *path)
+{
+    dpGetCurrentContext()->getBuilder()->addPreloadPath(path);
+}
+
 dpAPI void dpAddMSBuildCommand(const char *msbuild_option)
 {
     dpGetCurrentContext()->getBuilder()->addMSBuildCommand(msbuild_option);
@@ -173,6 +182,16 @@ dpAPI bool dpStartAutoBuild()
 dpAPI bool dpStopAutoBuild()
 {
     return dpGetCurrentContext()->getBuilder()->stopAutoBuild();
+}
+
+dpAPI bool dpStartPreload()
+{
+    return dpGetCurrentContext()->getBuilder()->startPreload();
+}
+
+dpAPI bool dpStopPreload()
+{
+    return dpGetCurrentContext()->getBuilder()->stopPreload();
 }
 
 dpAPI void dpUpdate()
