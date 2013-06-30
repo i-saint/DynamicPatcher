@@ -248,7 +248,13 @@ void dpBuilder::preload()
             if(m_preload_stop) { return; }
 
             dpObjFile *obj = new dpObjFile(m_context);
-            if(obj->loadFile(path.c_str())) {
+            bool loaded = false;
+            {
+                dpMutex::ScopedLock lock(m_mtx_preload);
+                loaded = obj->loadFile(path.c_str());
+            }
+
+            if(loaded) {
                 dpPrintInfo("preload begin %s\n", path.c_str());
                 obj->eachSymbols([&](dpSymbol *sym){
                     if(m_preload_stop) { return; }
