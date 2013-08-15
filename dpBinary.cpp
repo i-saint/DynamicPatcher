@@ -4,7 +4,6 @@
 
 #include "DynamicPatcher.h"
 #include "dpInternal.h"
-#include <regex>
 
 #ifdef _M_X64
 #   define dpSymPrefix
@@ -366,6 +365,10 @@ void*          dpObjFile::getBaseAddress() const      { return m_data; }
 
 void* dpObjFile::resolveSymbol( const char *name )
 {
+    if(dpGetLoader()->doesForceHostSymbol(name)) {
+        return dpGetLoader()->findHostSymbolByName(name);
+    }
+
     void *sym = nullptr;
     {
         if(const dpSymbol *s=getSymbolTable().findSymbolByName(name)) {

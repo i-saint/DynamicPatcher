@@ -136,6 +136,7 @@ dpAPI bool   dpPatchAddressToAddress(void *target, void *hook_addr);
 dpAPI bool   dpPatchByAddress(void *hook_addr); // patches the host symbol that have same name of hook
 dpAPI bool   dpUnpatchByAddress(void *target_or_hook_addr);
 dpAPI void*  dpGetUnpatched(void *target_or_hook_addr);
+dpAPI void   dpAddForceHostSymbolPattern(const char *pattern);
 
 dpAPI void   dpAddModulePath(const char *path); // accepts wildcard. affects auto build and dpReload()
 dpAPI void   dpAddSourcePath(const char *path); // 
@@ -183,6 +184,7 @@ dpAPI const char*   dpGetVCVarsPath();
 #define dpPatchByAddress(...) 
 #define dpUnpatchByAddress(...)
 #define dpGetUnpatched(...) 
+#define dpAddForceHostSymbolPattern(...) 
 
 #define dpAddModulePath(...) 
 #define dpAddSourcePath(...) 

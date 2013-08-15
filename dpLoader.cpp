@@ -234,3 +234,24 @@ void dpLoader::deleteSymbol(dpSymbol *sym)
     sym->~dpSymbol();
     m_symalloc.deallocate(sym);
 }
+
+void dpLoader::addForceHostSymbolPattern(const char *pattern)
+{
+    m_force_host_symbol_patterns.push_back(std::regex(pattern));
+}
+
+bool dpLoader::doesForceHostSymbol(const char *name)
+{
+    if(m_force_host_symbol_patterns.empty()) { return false; }
+
+    char demangled[4096];
+    dpDemangle(name, demangled, sizeof(demangled));
+    bool ret = false;
+    for(size_t i=0; i<m_force_host_symbol_patterns.size(); ++i) {
+        if(std::regex_match(demangled, m_force_host_symbol_patterns[i])) {
+            ret = true;
+            break;
+        }
+    }
+    return ret;
+}

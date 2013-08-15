@@ -170,6 +170,7 @@ void* dpPatcher::patch(dpSymbol *target, dpSymbol *hook)
 {
     if(!target || !hook) { return nullptr; }
     if(dpIsLinkFailed(target->flags) || dpIsLinkFailed(hook->flags)) { return nullptr; }
+    if(dpGetLoader()->doesForceHostSymbol(target->name)) { return nullptr; }
 
     unpatchByAddress(target->address);
 

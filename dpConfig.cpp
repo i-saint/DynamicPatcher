@@ -62,6 +62,7 @@ bool dpConfigFile::load(const char *path)
             else if(sscanf(line, "preload path: \"%[^\"]\"", opt))      { preload_paths.push_back(opt); }
             else if(sscanf(line, "msbuild command: \"%[^\"]\"", opt))   { msbuild_commands.push_back(opt); }
             else if(sscanf(line, "build command: \"%[^\"]\"", opt))     { build_commands.push_back(opt); }
+            else if(sscanf(line, "force host symbol pattern: \"%[^\"]\"", opt)) { force_host_symbol_patterns.push_back(opt); }
         }
         fclose(f);
         config_path = path;

@@ -11,6 +11,7 @@
 #include <set>
 #include <map>
 #include <algorithm>
+#include <regex>
 #include "DynamicPatcher.h"
 
 typedef unsigned long long dpTime;
@@ -233,6 +234,7 @@ struct dpConfigFile
     std::vector<std::string> preload_paths;
     std::vector<std::string> msbuild_commands;
     std::vector<std::string> build_commands;
+    std::vector<std::string> force_host_symbol_patterns;
     std::string config_path;
 
     dpConfigFile();
@@ -411,10 +413,15 @@ public:
     dpSymbol* newSymbol(const char *nam=nullptr, void *addr=nullptr, int fla=0, int sect=0, dpBinary *bin=nullptr);
     void deleteSymbol(dpSymbol *sym);
 
+    void addForceHostSymbolPattern(const char *pattern);
+    bool doesForceHostSymbol(const char *name);
+
 private:
     typedef std::vector<dpBinary*> binary_cont;
+    typedef std::vector<std::regex> pattern_cont;
 
     dpContext *m_context;
+    pattern_cont m_force_host_symbol_patterns;
     binary_cont m_binaries;
     binary_cont m_onload_queue;
     dpSymbolTable m_hostsymbols;
@@ -534,6 +541,7 @@ public:
     bool   patchByAddress(void *hook);
     bool   unpatchByAddress(void *target_or_hook_addr);
     void*  getUnpatched(void *target_or_hook_addr);
+    void   addForceHostSymbolPattern(const char *pattern);
 
 private:
     dpBuilder *m_builder;

@@ -38,8 +38,10 @@ dpAPI dpContext* dpGetCurrentContext()
 dpAPI bool dpInitialize(const dpConfig &conf)
 {
     if(!g_dpDefaultContext) {
+        DWORD opt = ::SymGetOptions();
+        opt |= SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES;
+        ::SymSetOptions(opt);
         ::SymInitialize(::GetCurrentProcess(), NULL, TRUE);
-        ::SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
 
         dpConfig &g_dpConfig = dpGetConfig();
         g_dpConfig = conf;
@@ -68,6 +70,7 @@ dpAPI bool dpInitialize(const dpConfig &conf)
             dpEach(cf.preload_paths,    [](const std::string &v){ dpAddPreloadPath(v.c_str()); });
             dpEach(cf.msbuild_commands, [](const std::string &v){ dpAddMSBuildCommand(v.c_str()); });
             dpEach(cf.build_commands,   [](const std::string &v){ dpAddBuildCommand(v.c_str()); });
+            dpEach(cf.force_host_symbol_patterns, [](const std::string &v){ dpAddForceHostSymbolPattern(v.c_str()); });
             if(!cf.source_paths.empty() && (!cf.msbuild_commands.empty() || !cf.build_commands.empty())) {
                 dpStartAutoBuild();
             }
@@ -135,7 +138,7 @@ dpAPI bool dpPatchByAddress(void *hook_addr)
     return dpGetCurrentContext()->patchByAddress(hook_addr);
 }
 
-dpAPI bool   dpUnpatchByAddress(void *target_or_hook_addr)
+dpAPI bool dpUnpatchByAddress(void *target_or_hook_addr)
 {
     return dpGetCurrentContext()->unpatchByAddress(target_or_hook_addr);
 };
@@ -143,6 +146,11 @@ dpAPI bool   dpUnpatchByAddress(void *target_or_hook_addr)
 dpAPI void* dpGetUnpatched(void *target_or_hook_addr)
 {
     return dpGetCurrentContext()->getUnpatched(target_or_hook_addr);
+}
+
+dpAPI void dpAddForceHostSymbolPattern(const char *pattern)
+{
+    return dpGetCurrentContext()->addForceHostSymbolPattern(pattern);
 }
 
 

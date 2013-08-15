@@ -4,7 +4,6 @@
 
 #include "DynamicPatcher.h"
 #include "dpInternal.h"
-#include <regex>
 
 dpContext::dpContext()
 {
@@ -114,4 +113,9 @@ void* dpContext::getUnpatched(void *target)
         return pd->unpatched;
     }
     return nullptr;
+}
+
+void dpContext::addForceHostSymbolPattern(const char *pattern)
+{
+    m_loader->addForceHostSymbolPattern(pattern);
 }
