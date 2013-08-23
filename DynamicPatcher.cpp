@@ -64,7 +64,6 @@ dpAPI bool dpInitialize(const dpConfig &conf)
                 });
                 dpLink();
             }
-            dpEach(cf.loads,            [](const std::string &v){ dpLoad(v.c_str()); });
             dpEach(cf.source_paths,     [](const std::string &v){ dpAddSourcePath(v.c_str()); });
             dpEach(cf.module_paths,     [](const std::string &v){ dpAddModulePath(v.c_str()); });
             dpEach(cf.preload_paths,    [](const std::string &v){ dpAddPreloadPath(v.c_str()); });

@@ -108,7 +108,7 @@ void dpPatcher::patchImpl(dpPatchData &pi)
         BYTE *trampoline = (BYTE*)m_talloc.allocate(target);
         dpAddJumpInstruction(trampoline, hook);
         dpAddJumpInstruction(target, trampoline);
-        ::FlushInstructionCache(proc, pi.trampoline, 32);
+        ::FlushInstructionCache(proc, trampoline, 32);
         ::FlushInstructionCache(proc, target, 32);
         pi.trampoline = trampoline;
     }
