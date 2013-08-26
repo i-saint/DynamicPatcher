@@ -49,7 +49,7 @@ dpAPI bool dpInitialize(const dpConfig &conf)
 
         dpConfigFile cf;
         bool config_loaded = false;
-        if((conf.sys_flags&dpE_SysLoadConfig)!=0 && cf.load()) {
+        if((conf.sys_flags&dpE_SysLoadConfig)!=0 && (conf.configfile ? cf.load(conf.configfile) : cf.load())) {
             config_loaded = true;
             if(cf.log_flags!=-1) { g_dpConfig.log_flags=cf.log_flags; }
             if(cf.sys_flags!=-1) { g_dpConfig.sys_flags=cf.sys_flags; }

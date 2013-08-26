@@ -94,9 +94,11 @@ struct dpConfig
     int log_flags; // combination of dpLogLevel
     int sys_flags; // combination of dpSystemFlags
     int vc_ver; // VisualC++ version to use to build. 2008/2010/2012
+    const char *configfile;
     unsigned long long starttime;
 
-    dpConfig(int log=dpE_LogSimple, int f=dpE_SysDefault) : log_flags(log), sys_flags(f), vc_ver(0), starttime()
+    dpConfig(int log=dpE_LogSimple, int f=dpE_SysDefault, const char *config=NULL)
+        : log_flags(log), sys_flags(f), configfile(config), vc_ver(0), starttime()
     {
 #if   _MSC_VER==1500
         vc_ver = 2008;
