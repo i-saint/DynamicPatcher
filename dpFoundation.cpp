@@ -156,53 +156,6 @@ dpTime dpGetSystemTime()
     return ret.qword;
 }
 
-// fill_gap: .dll ファイルをそのままメモリに移した場合はこれを true にする必要があります。
-// LoadLibrary() で正しくロードしたものは section の再配置が行われ、元ファイルとはデータの配置にズレが生じます。
-// fill_gap==true の場合このズレを補正します。
-char* dpGetPDBPathFromModule(void *pModule, bool fill_gap)
-{
-    if(!pModule) { return nullptr; }
-
-    struct CV_INFO_PDB70
-    {
-        DWORD  CvSignature;
-        GUID Signature;
-        DWORD Age;
-        BYTE PdbFileName[1];
-    };
-
-    PBYTE pData = (PUCHAR)pModule;
-    PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)pData;
-    PIMAGE_NT_HEADERS pNtHeaders = (PIMAGE_NT_HEADERS)(pData + pDosHeader->e_lfanew);
-    if(pDosHeader->e_magic==IMAGE_DOS_SIGNATURE && pNtHeaders->Signature==IMAGE_NT_SIGNATURE) {
-        ULONG DebugRVA = pNtHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_DEBUG].VirtualAddress;
-        if(DebugRVA==0) { return nullptr; }
-
-        PIMAGE_SECTION_HEADER pSectionHeader = IMAGE_FIRST_SECTION(pNtHeaders);
-        for(size_t i=0; i<pNtHeaders->FileHeader.NumberOfSections; ++i) {
-            PIMAGE_SECTION_HEADER s = pSectionHeader+i;
-            if(DebugRVA >= s->VirtualAddress && DebugRVA < s->VirtualAddress+s->SizeOfRawData) {
-                pSectionHeader = s;
-                break;
-            }
-        }
-        if(fill_gap) {
-            DWORD gap = pSectionHeader->VirtualAddress - pSectionHeader->PointerToRawData;
-            pData -= gap;
-        }
-
-        PIMAGE_DEBUG_DIRECTORY pDebug;
-        pDebug = (PIMAGE_DEBUG_DIRECTORY)(pData + DebugRVA);
-        if(DebugRVA!=0 && DebugRVA < pNtHeaders->OptionalHeader.SizeOfImage && pDebug->Type==IMAGE_DEBUG_TYPE_CODEVIEW) {
-            CV_INFO_PDB70 *pCVI = (CV_INFO_PDB70*)(pData + pDebug->AddressOfRawData);
-            if(pCVI->CvSignature=='SDSR') {
-                return (char*)pCVI->PdbFileName;
-            }
-        }
-    }
-    return nullptr;
-}
-
 bool dpCopyFile(const char *srcpath, const char *dstpath)
 {
     return ::CopyFileA(srcpath, dstpath, FALSE)==TRUE;

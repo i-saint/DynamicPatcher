@@ -119,8 +119,6 @@ void*   dpAllocateModule(size_t size);
 void    dpDeallocate(void *location, size_t size);
 dpTime  dpGetMTime(const char *path);
 dpTime  dpGetSystemTime();
-
-char*   dpGetPDBPathFromModule(void *pModule, bool fill_gap=false);
 bool    dpCopyFile(const char *srcpath, const char *dstpath);
 
 template<class F> void dpGlob(const char *path, const F &f);
