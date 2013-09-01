@@ -34,11 +34,6 @@ size_t dpContext::load(const char *path)
     });
     return ret;
 }
-dpObjFile* dpContext::loadObj(const char *path) { return m_loader->loadObj(path); }
-dpLibFile* dpContext::loadLib(const char *path) { return m_loader->loadLib(path); }
-dpDllFile* dpContext::loadDll(const char *path) { return m_loader->loadDll(path); }
-bool dpContext::unload( const char *path ) { return m_loader->unload(path); }
-bool dpContext::link() { return m_loader->link(); }
 
 size_t dpContext::patchByFile(const char *filename, const char *filter_regex)
 {

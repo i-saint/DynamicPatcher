@@ -416,11 +416,16 @@ public:
     void addForceHostSymbolPattern(const char *pattern);
     bool doesForceHostSymbol(const char *name);
 
+    bool   loadMapFile(const char *path, void *imagebase);
+    size_t loadMapFiles();
+
 private:
-    typedef std::vector<dpBinary*> binary_cont;
+    typedef std::vector<dpBinary*>  binary_cont;
     typedef std::vector<std::regex> pattern_cont;
+    typedef std::set<std::string>   string_set;
 
     dpContext *m_context;
+    string_set m_mapfiles_read;
     pattern_cont m_force_host_symbol_patterns;
     binary_cont m_binaries;
     binary_cont m_onload_queue;
@@ -527,11 +532,6 @@ public:
     dpLoader*  getLoader();
 
     size_t     load(const char *path);
-    dpObjFile* loadObj(const char *path);
-    dpLibFile* loadLib(const char *path);
-    dpDllFile* loadDll(const char *path);
-    bool       unload(const char *path);
-    bool       link();
 
     size_t patchByFile(const char *filename, const char *filter_regex);
     size_t patchByFile(const char *filename, const std::function<bool (const dpSymbolS&)> &condition);

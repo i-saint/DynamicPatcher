@@ -4,6 +4,8 @@
 
 #include "DynamicPatcher.h"
 #include "dpInternal.h"
+#include <psapi.h>
+#pragma comment(lib, "psapi.lib")
 
 
 static const int g_host_symbol_flags = dpE_Code|dpE_Read|dpE_Execute|dpE_HostSymbol|dpE_NameNeedsDelete;
@@ -53,6 +55,7 @@ dpSymbol* dpLoader::findHostSymbolByAddress(void *addr)
 dpLoader::dpLoader(dpContext *ctx)
     : m_context(ctx)
 {
+    loadMapFiles();
 }
 
 dpLoader::~dpLoader()
@@ -60,6 +63,78 @@ dpLoader::~dpLoader()
     while(!m_binaries.empty()) { unloadImpl(m_binaries.front()); }
     m_hostsymbols.eachSymbols([&](dpSymbol *sym){ deleteSymbol(sym); });
     m_hostsymbols.clear();
+}
+
+bool dpLoader::loadMapFile(const char *path, void *imagebase)
+{
+    if(m_mapfiles_read.find(path)!=m_mapfiles_read.end()) {
+        return true;
+    }
+
+    FILE *file = fopen(path, "rb");
+    if(!file) { return false; }
+
+    char line[1024*5]; // VisualC++2013 で symbol 名は最大 4KB
+
+// C99 から size_t 用の scanf フォーマット %zx が加わったらしいが、VisualC++ は未対応な様子
+#ifdef _WIN64
+#   define ZX "%llx"
+#else
+#   define ZX "%x"
+#endif
+
+    size_t preferred_addr = 0;
+    size_t gap = 0;
+    {
+        while(fgets(line, _countof(line), file)) {
+            if(sscanf(line, " Preferred load address is " ZX, &preferred_addr)==1) {
+                gap = (size_t)imagebase - preferred_addr;
+                break;
+            }
+        }
+    }
+    {
+        std::regex reg("^ [0-9a-f]{4}:[0-9a-f]{8}       ([^ ]+) +([0-9a-f]+) ");
+        std::cmatch m;
+        while(fgets(line, _countof(line), file)) {
+            if(std::regex_search(line, m, reg)) {
+                char *name_src = line+m.position(1);
+                size_t rva_plus_base = 0;
+                sscanf(line+m.position(2), ZX, &rva_plus_base);
+                if(rva_plus_base <= preferred_addr) { continue; }
+
+                void *addr = (void*)(rva_plus_base + gap);
+                char *name = new char[m.length(1)+1];
+                strncpy(name, name_src, m.length(1));
+                name[m.length(1)] = '\0';
+                m_hostsymbols.addSymbol(newSymbol(name, addr, g_host_symbol_flags, 0, nullptr));
+            }
+        }
+    }
+    m_hostsymbols.sort();
+    fclose(file);
+    m_mapfiles_read.insert(path);
+    return true;
+}
+
+size_t dpLoader::loadMapFiles()
+{
+    std::vector<HMODULE> modules;
+    DWORD num_modules;
+    ::EnumProcessModules(::GetCurrentProcess(), nullptr, 0, &num_modules);
+    modules.resize(num_modules/sizeof(HMODULE));
+    ::EnumProcessModules(::GetCurrentProcess(), &modules[0], num_modules, &num_modules);
+    size_t ret = 0;
+    for(size_t i=0; i<modules.size(); ++i) {
+        char path[MAX_PATH];
+        HMODULE mod = modules[i];
+        ::GetModuleFileNameA(mod, path, _countof(path));
+        std::string mappath = std::regex_replace(std::string(path), std::regex("\\.[^.]+$"), std::string(".map"));
+        if(loadMapFile(mappath.c_str(), mod)) {
+            ++ret;
+        }
+    }
+    return ret;
 }
 
 void dpLoader::unloadImpl( dpBinary *bin )

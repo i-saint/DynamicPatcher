@@ -101,11 +101,12 @@ dpAPI bool dpFinalize()
 
 
 dpAPI size_t dpLoad(const char *path)  { return dpGetCurrentContext()->load(path); }
-dpAPI bool dpLoadObj(const char *path) { return dpGetCurrentContext()->loadObj(path)!=nullptr; }
-dpAPI bool dpLoadLib(const char *path) { return dpGetCurrentContext()->loadLib(path)!=nullptr; }
-dpAPI bool dpLoadDll(const char *path) { return dpGetCurrentContext()->loadDll(path)!=nullptr; }
-dpAPI bool dpUnload(const char *path)  { return dpGetCurrentContext()->unload(path); };
-dpAPI bool dpLink() { return dpGetCurrentContext()->link(); }
+dpAPI bool dpLoadObj(const char *path) { return dpGetCurrentContext()->getLoader()->loadObj(path)!=nullptr; }
+dpAPI bool dpLoadLib(const char *path) { return dpGetCurrentContext()->getLoader()->loadLib(path)!=nullptr; }
+dpAPI bool dpLoadDll(const char *path) { return dpGetCurrentContext()->getLoader()->loadDll(path)!=nullptr; }
+dpAPI size_t dpLoadMapFiles()          { return dpGetCurrentContext()->getLoader()->loadMapFiles(); };
+dpAPI bool dpUnload(const char *path)  { return dpGetCurrentContext()->getLoader()->unload(path); };
+dpAPI bool dpLink() { return dpGetCurrentContext()->getLoader()->link(); }
 
 dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex)
 {
