@@ -141,6 +141,7 @@ dpAPI bool   dpPatchAddressToName(const char *target_name, void *hook_addr);
 dpAPI bool   dpPatchAddressToAddress(void *target, void *hook_addr);
 dpAPI bool   dpPatchByAddress(void *hook_addr); // patches the host symbol that have same name of hook
 dpAPI bool   dpUnpatchByAddress(void *target_or_hook_addr);
+dpAPI void   dpUnpatchAll();
 dpAPI void*  dpGetUnpatched(void *target_or_hook_addr);
 dpAPI void   dpAddForceHostSymbolPattern(const char *pattern);
 
@@ -190,6 +191,7 @@ dpAPI const char*   dpGetVCVarsPath();
 #define dpPatchAddressToAddress(...) 
 #define dpPatchByAddress(...) 
 #define dpUnpatchByAddress(...)
+#define dpUnpatchAll(...)
 #define dpGetUnpatched(...) 
 #define dpAddForceHostSymbolPattern(...) 
 

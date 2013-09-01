@@ -538,6 +538,7 @@ public:
     bool   patchAddressToAddress(void *target, void *hook);
     bool   patchByAddress(void *hook);
     bool   unpatchByAddress(void *target_or_hook_addr);
+    void   unpatchAll();
     void*  getUnpatched(void *target_or_hook_addr);
     void   addForceHostSymbolPattern(const char *pattern);
 

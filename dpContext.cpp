@@ -102,6 +102,11 @@ bool dpContext::unpatchByAddress(void *target_or_hook_addr)
     return m_patcher->unpatchByAddress(target_or_hook_addr);
 }
 
+void dpContext::unpatchAll()
+{
+    return m_patcher->unpatchAll();
+}
+
 void* dpContext::getUnpatched(void *target)
 {
     if(dpPatchData *pd = m_patcher->findPatchByAddress(target)) {
