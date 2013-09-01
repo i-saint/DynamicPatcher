@@ -125,9 +125,12 @@ dpAPI size_t dpLoad(const char *path); // path to .obj .lib .dll .exe. accepts w
 dpAPI bool   dpLoadObj(const char *path); // load as .obj regardless file extension
 dpAPI bool   dpLoadLib(const char *path); // load as .lib regardless file extension
 dpAPI bool   dpLoadDll(const char *path); // load as .dll regardless file extension
-dpAPI size_t dpLoadMapFiles(); // load symbol info from .map files.
 dpAPI bool   dpUnload(const char *path);
 dpAPI bool   dpLink(); // must be called after dpLoad*()s & dpUnload()s. onload handler is called in this.
+dpAPI size_t dpLoadMapFiles();  // load symbol info from .map files. this function will reduce link time for .obj files drastically.
+                                // .map files should be placed on same directory of .exe or .dll with same name.
+                                // ex) c:/foo/bar.exe -> c:/foo/bar.map
+                                // .map files will be generated if linker option /map is specified.
 
 dpAPI size_t dpPatchByFile(const char *filename, const char *filter_regex); // ex: dpPatchByFile("MyClass.obj", "MyClass::.*")
 #ifdef dpWithStdFunction
@@ -178,9 +181,9 @@ dpAPI const char*   dpGetVCVarsPath();
 #define dpLoadObj(...) 
 #define dpLoadLib(...) 
 #define dpLoadDll(...) 
-#define dpLoadMapFiles(...) 
 #define dpUnload(...) 
 #define dpLink(...) 
+#define dpLoadMapFiles(...) 
 #define dpPatchByFile(...) 
 #define dpPatchNameToName(...) 
 #define dpPatchAddressToName(...) 
