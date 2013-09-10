@@ -8,8 +8,8 @@ compile .cpps, load and link .objs (or .libs, .dlls), and update functions at ru
 
 
 ##detailed description
-(japanese) http://www.slideshare.net/i-saint/runtime-cediting
-(japanese) http://i-saint.hatenablog.com/entry/2013/06/06/212515
+(japanese) http://www.slideshare.net/i-saint/runtime-cediting  
+(japanese) http://i-saint.hatenablog.com/entry/2013/06/06/212515  
 
 ##example
 ```c++
