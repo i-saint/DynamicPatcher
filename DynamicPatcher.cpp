@@ -5,6 +5,11 @@
 #include "DynamicPatcher.h"
 #include "dpInternal.h"
 
+#ifdef dpWithTDisasm
+#pragma comment(lib,"disasm" dpLibArch ".lib")
+#endif // dpWithTDisasm
+
+
 static dpContext *g_dpDefaultContext = nullptr;
 static __declspec(thread) dpContext *g_dpCurrentContext = nullptr;
 

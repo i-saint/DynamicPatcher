@@ -48,11 +48,6 @@
     <ClCompile Include="dpPatcher.cpp" />
     <ClCompile Include="DynamicPatcher.cpp" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="disasm.vcxproj">
-      <Project>{d6a7f953-26bf-45f6-92fa-f3b6ab245c1b}</Project>
-    </ProjectReference>
-  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{7CCD61E5-5F56-4050-BACC-1467972D2247}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
