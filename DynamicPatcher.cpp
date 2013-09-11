@@ -40,6 +40,7 @@ dpAPI bool dpInitialize(const dpConfig &conf)
     if(!g_dpDefaultContext) {
         DWORD opt = ::SymGetOptions();
         opt |= SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES;
+        opt &= ~SYMOPT_UNDNAME;
         ::SymSetOptions(opt);
         ::SymInitialize(::GetCurrentProcess(), NULL, TRUE);
 

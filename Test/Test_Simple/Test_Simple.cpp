@@ -45,7 +45,7 @@ public:
     Test() : m_end_flag(false) {}
     virtual ~Test() {}
 
-    virtual void doSomething()
+    dpNoInline virtual void doSomething()
     {
         puts("Test::doSomething()");
         printf("Test::s_value: %d\n", s_value);
@@ -74,9 +74,6 @@ int main(int argc, char *argv[])
     dpAddSourcePath("Test_Simple");
     dpAddMSBuildCommand("Test_Simple.vcxproj /target:ClCompile /m /p:Configuration="dpConfiguration";Platform="dpPlatform);
     dpStartAutoBuild();
-
-    //dpLoad(dpObjDir"/*.obj");
-    dpLink();
 
     printf("DynamicPatcher Test_Simple\n");
     {
