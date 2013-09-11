@@ -6,44 +6,12 @@
     <ClCompile Include="dpLoader.cpp" />
     <ClCompile Include="dpPatcher.cpp" />
     <ClCompile Include="DynamicPatcher.cpp" />
-    <ClCompile Include="disasm-lib\cpu.c">
-      <Filter>disasm-lib</Filter>
-    </ClCompile>
-    <ClCompile Include="disasm-lib\disasm.c">
-      <Filter>disasm-lib</Filter>
-    </ClCompile>
-    <ClCompile Include="disasm-lib\disasm_x86.c">
-      <Filter>disasm-lib</Filter>
-    </ClCompile>
-    <ClCompile Include="disasm-lib\misc.c">
-      <Filter>disasm-lib</Filter>
-    </ClCompile>
     <ClCompile Include="dpFoundation.cpp" />
     <ClCompile Include="dpContext.cpp" />
     <ClCompile Include="dpConfig.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DynamicPatcher.h" />
-    <ClInclude Include="disasm-lib\cpu.h">
-      <Filter>disasm-lib</Filter>
-    </ClInclude>
-    <ClInclude Include="disasm-lib\disasm.h">
-      <Filter>disasm-lib</Filter>
-    </ClInclude>
-    <ClInclude Include="disasm-lib\disasm_x86.h">
-      <Filter>disasm-lib</Filter>
-    </ClInclude>
-    <ClInclude Include="disasm-lib\disasm_x86_tables.h">
-      <Filter>disasm-lib</Filter>
-    </ClInclude>
-    <ClInclude Include="disasm-lib\misc.h">
-      <Filter>disasm-lib</Filter>
-    </ClInclude>
     <ClInclude Include="dpInternal.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <Filter Include="disasm-lib">
-      <UniqueIdentifier>{350a6ebe-5c55-4219-b806-031e7e991abf}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
 </Project>

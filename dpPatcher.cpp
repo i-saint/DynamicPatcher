@@ -4,11 +4,15 @@
 
 #include "DynamicPatcher.h"
 #include "dpInternal.h"
-#include "disasm-lib/disasm.h"
 #include <regex>
+#ifdef dpWithTDisasm
+#include "disasm-lib/disasm.h"
+#endif // dpWithTDisasm
 
 static size_t dpCopyInstructions(void *dst, void *src, size_t minlen)
 {
+#ifdef dpWithTDisasm
+
     size_t len = 0;
 #ifdef _M_X64
     ARCHITECTURE_TYPE arch = ARCH_X64;
@@ -56,6 +60,13 @@ static size_t dpCopyInstructions(void *dst, void *src, size_t minlen)
         CloseDisassembler(&dis);
     }
     return len;
+
+#else // dpWithTDisasm
+
+    memcpy(dst, src, minlen);
+    return minlen;
+
+#endif // dpWithTDisasm
 }
 
 static BYTE* dpAddJumpInstruction(BYTE* from, BYTE* to)

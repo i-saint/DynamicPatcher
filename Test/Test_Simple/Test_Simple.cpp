@@ -88,10 +88,11 @@ int main(int argc, char *argv[])
     dpFinalize();
 }
 
-
+#ifdef dpWithTDisasm
 dpOnLoad(
     dpPatchAddressToAddress(&puts, &puts_hook);
 )
+#endif // dpWithTDisasm
 
 dpOnUnload(
     printf("unloaded.\n");

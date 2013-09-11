@@ -7,6 +7,10 @@
 
 #ifndef dpDisable
 
+// this option makes dpGetUnpatched() work. and makes dependency for disasm.
+// dpGetUnpatched() returns the function that behaves as old (before patch) function.
+#define dpWithTDisasm
+
 #if _MSC_VER>=1600 // dpPatchByFile() require C++11
 #   define dpWithStdFunction
 #endif // _MSC_VER>=1600

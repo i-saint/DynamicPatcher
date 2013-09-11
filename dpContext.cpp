@@ -109,9 +109,11 @@ void dpContext::unpatchAll()
 
 void* dpContext::getUnpatched(void *target)
 {
+#ifdef dpWithTDisasm
     if(dpPatchData *pd = m_patcher->findPatchByAddress(target)) {
         return pd->unpatched;
     }
+#endif // dpWithTDisasm
     return nullptr;
 }
 
