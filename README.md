@@ -69,6 +69,7 @@ int main()
 <img src="http://mirrors.creativecommons.org/presskit/buttons/88x31/png/by.png" alt="CC BY" width="200" height="70" />
 
 ##thanks
+DynamicPatcher contains a disassembler (tDisasm) by Matt Conover.
 [Runtime-Compiled C++](http://runtimecompiledcplusplus.blogspot.com/)  
 [Mhook](http://codefromthe70s.org/mhook23.aspx)  
 [PE/COFF file format](http://www.skyfree.org/linux/references/coff.pdf)  
