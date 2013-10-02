@@ -74,7 +74,7 @@ bool dpLoader::loadMapFile(const char *path, void *imagebase)
     FILE *file = fopen(path, "rb");
     if(!file) { return false; }
 
-    char line[1024*5]; // VisualC++2013 で symbol 名は最大 4KB
+    char line[MAX_SYM_NAME+1];
 
 // C99 から size_t 用の scanf フォーマット %zx が加わったらしいが、VisualC++ は未対応な様子
 #ifdef _WIN64
@@ -94,19 +94,23 @@ bool dpLoader::loadMapFile(const char *path, void *imagebase)
         }
     }
     {
-        std::regex reg("^ [0-9a-f]{4}:[0-9a-f]{8}       ([^ ]+) +([0-9a-f]+) ");
+        std::regex reg("^ [0-9a-f]{4}:[0-9a-f]{8}       ");
         std::cmatch m;
         while(fgets(line, _countof(line), file)) {
             if(std::regex_search(line, m, reg)) {
-                char *name_src = line+m.position(1);
+                const char *name_src = m[0].second;
+                auto name_end = std::find(name_src, const_cast<const char *>(line+_countof(line)), ' ');
+                auto rva_plus_base_start = std::find_if_not(name_end, const_cast<const char *>(line+_countof(line)), [](char c){ return c == ' '; });
+                *(const_cast<char *>(rva_plus_base_start)+8) = '\0';
                 size_t rva_plus_base = 0;
-                sscanf(line+m.position(2), ZX, &rva_plus_base);
+                sscanf(rva_plus_base_start, ZX, &rva_plus_base);
                 if(rva_plus_base <= preferred_addr) { continue; }
 
                 void *addr = (void*)(rva_plus_base + gap);
-                char *name = new char[m.length(1)+1];
-                strncpy(name, name_src, m.length(1));
-                name[m.length(1)] = '\0';
+                size_t name_length = std::distance(name_src, name_end);
+                char *name = new char[name_length+1];
+                strncpy(name, name_src, name_length);
+                name[name_length] = '\0';
                 m_hostsymbols.addSymbol(newSymbol(name, addr, g_host_symbol_flags, 0, nullptr));
             }
         }
