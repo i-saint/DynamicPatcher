@@ -74,3 +74,5 @@ DynamicPatcher contains a disassembler (tDisasm) by Matt Conover.
 [Mhook](http://codefromthe70s.org/mhook23.aspx)  
 [PE/COFF file format](http://www.skyfree.org/linux/references/coff.pdf)  
 [lib file format](http://hp.vector.co.jp/authors/VA050396/tech_04.html)  
+  
+[Riot Games](http://www.riotgames.com/) used this library!  
