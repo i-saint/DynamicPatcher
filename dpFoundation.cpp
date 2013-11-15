@@ -572,3 +572,4 @@ dpSymbol* dpSymbolTable::findSymbolByAddress( void *addr )
     }
     return nullptr;
 }
+

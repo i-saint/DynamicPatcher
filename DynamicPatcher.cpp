@@ -9,7 +9,6 @@
 #pragma comment(lib,"disasm" dpLibArch ".lib")
 #endif // dpWithTDisasm
 
-
 static dpContext *g_dpDefaultContext = nullptr;
 static __declspec(thread) dpContext *g_dpCurrentContext = nullptr;
 
@@ -220,4 +219,80 @@ dpAPI void dpUpdate()
 dpAPI const char* dpGetVCVarsPath()
 {
     return dpGetCurrentContext()->getBuilder()->getVCVarsPath();
+}
+
+
+#include <tlhelp32.h>
+
+// F: [](DWORD thread_id)->void
+template<class F>
+inline void dpEnumerateThreads(DWORD pid, const F &f)
+{
+    HANDLE ss = ::CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if(ss!=INVALID_HANDLE_VALUE) {
+        THREADENTRY32 te;
+        te.dwSize = sizeof(te);
+        if(::Thread32First(ss, &te)) {
+            do {
+                if(te.dwSize >= FIELD_OFFSET(THREADENTRY32, th32OwnerProcessID)+sizeof(te.th32OwnerProcessID) &&
+                    te.th32OwnerProcessID==pid)
+                {
+                    f(te.th32ThreadID);
+                }
+                te.dwSize = sizeof(te);
+            } while(::Thread32Next(ss, &te));
+        }
+        ::CloseHandle(ss);
+    }
+}
+
+void dpExecExclusive(const std::function<void ()> &f)
+{
+    std::vector<HANDLE> threads;
+    DWORD pid = ::GetCurrentProcessId();
+    dpEnumerateThreads(pid, [&](DWORD tid){
+        if(tid==::GetCurrentThreadId()) { return; }
+        if(HANDLE thread=::OpenThread(THREAD_ALL_ACCESS, FALSE, tid)) {
+            ::SuspendThread(thread);
+            threads.push_back(thread);
+        }
+    });
+    f();
+    std::for_each(threads.begin(), threads.end(), [](HANDLE thread){
+        ::ResumeThread(thread);
+        ::CloseHandle(thread);
+    });
+}
+
+
+bool g_dp_stop_periodic_update = false;
+bool g_dp_periodic_update_running = false;
+
+unsigned __stdcall dpPeriodicUpdate(void *)
+{
+    while(!g_dp_stop_periodic_update) {
+        dpExecExclusive([&](){ dpUpdate(); });
+        ::Sleep(1000);
+    }
+    g_dp_periodic_update_running = false;
+    return 0;
+}
+
+dpAPI void dpBeginPeriodicUpdate()
+{
+    dpExecExclusive([&](){ dpInitialize(); });
+    g_dp_stop_periodic_update = false;
+    g_dp_periodic_update_running = true;
+    // std::thread 使いたいが VS2010 対応を考慮して使わない方向で
+    _beginthreadex(nullptr, 0, &dpPeriodicUpdate, nullptr, 0, nullptr);
+}
+
+dpAPI void dpEndPeriodicUpdate()
+{
+    if(g_dp_periodic_update_running) {
+        g_dp_stop_periodic_update = true;
+        while(!g_dp_periodic_update_running) {
+            ::SwitchToThread();
+        }
+    }
 }

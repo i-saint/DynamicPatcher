@@ -4,16 +4,17 @@
 
 #include <windows.h>
 
-#define dpLinkDynamic
 #include "DynamicPatcher.h"
+dpAPI void dpBeginPeriodicUpdate();
+dpAPI void dpEndPeriodicUpdate();
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
 {
     if(fdwReason==DLL_PROCESS_ATTACH) {
-        dpInitialize();
+        dpBeginPeriodicUpdate();
     }
     else if(fdwReason==DLL_PROCESS_DETACH) {
-        dpFinalize();
+        dpEndPeriodicUpdate();
     }
     return TRUE;
 }

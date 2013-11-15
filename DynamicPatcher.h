@@ -110,6 +110,8 @@ struct dpConfig
         vc_ver = 2010;
 #elif _MSC_VER==1700
         vc_ver = 2012;
+#elif _MSC_VER==1800
+        vc_ver = 2013;
 #endif
     }
 };
