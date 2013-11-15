@@ -1,9 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Dll", "Test_Dll.vcxproj", "{0E8C293B-618B-428B-B1AC-502544B732FB}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Dll", "Test_Dll2010.vcxproj", "{0E8C293B-618B-428B-B1AC-502544B732FB}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Lib", "Test_Lib.vcxproj", "{78800EB9-3249-4A82-9074-3D68A2E56C60}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Lib", "Test_Lib2010.vcxproj", "{78800EB9-3249-4A82-9074-3D68A2E56C60}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

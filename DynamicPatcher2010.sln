@@ -1,63 +1,63 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DynamicPatcher", "DynamicPatcher.vcxproj", "{7CCD61E5-5F56-4050-BACC-1467972D2247}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DynamicPatcher", "DynamicPatcher2010.vcxproj", "{7CCD61E5-5F56-4050-BACC-1467972D2247}"
 	ProjectSection(ProjectDependencies) = postProject
 		{D6A7F953-26BF-45F6-92FA-F3B6AB245C1B} = {D6A7F953-26BF-45F6-92FA-F3B6AB245C1B}
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{64A0BD32-2657-48A5-A8A8-B047C39B0455}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DynamicPatcherInjector", "DynamicPatcherInjector.vcxproj", "{7986011C-5076-4506-AB77-7272257885FD}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DynamicPatcherInjector", "DynamicPatcherInjector2010.vcxproj", "{7986011C-5076-4506-AB77-7272257885FD}"
 	ProjectSection(ProjectDependencies) = postProject
 		{7CCD61E5-5F56-4050-BACC-1467972D2247} = {7CCD61E5-5F56-4050-BACC-1467972D2247}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DynamicPatcherInjectorDLL", "DynamicPatcherInjectorDLL.vcxproj", "{AF9F0E41-895E-49BA-B522-45691F0BD4F7}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DynamicPatcherInjectorDLL", "DynamicPatcherInjectorDLL2010.vcxproj", "{AF9F0E41-895E-49BA-B522-45691F0BD4F7}"
 	ProjectSection(ProjectDependencies) = postProject
 		{7CCD61E5-5F56-4050-BACC-1467972D2247} = {7CCD61E5-5F56-4050-BACC-1467972D2247}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Dll", "Test\Test_Dll.vcxproj", "{0E8C293B-618B-428B-B1AC-502544B732FB}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Dll", "Test\Test_Dll2010.vcxproj", "{0E8C293B-618B-428B-B1AC-502544B732FB}"
 	ProjectSection(ProjectDependencies) = postProject
 		{7CCD61E5-5F56-4050-BACC-1467972D2247} = {7CCD61E5-5F56-4050-BACC-1467972D2247}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Inject", "Test\Test_Inject.vcxproj", "{8CA885E0-BF97-4FB3-82AD-DBE0FF0E4538}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Inject", "Test\Test_Inject2010.vcxproj", "{8CA885E0-BF97-4FB3-82AD-DBE0FF0E4538}"
 	ProjectSection(ProjectDependencies) = postProject
 		{7CCD61E5-5F56-4050-BACC-1467972D2247} = {7CCD61E5-5F56-4050-BACC-1467972D2247}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Injected", "Test\Test_Injected.vcxproj", "{4256E731-91A4-44B7-993C-13CA2CFDF71B}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Injected", "Test\Test_Injected2010.vcxproj", "{4256E731-91A4-44B7-993C-13CA2CFDF71B}"
 	ProjectSection(ProjectDependencies) = postProject
 		{7CCD61E5-5F56-4050-BACC-1467972D2247} = {7CCD61E5-5F56-4050-BACC-1467972D2247}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Lib", "Test\Test_Lib.vcxproj", "{78800EB9-3249-4A82-9074-3D68A2E56C60}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Lib", "Test\Test_Lib2010.vcxproj", "{78800EB9-3249-4A82-9074-3D68A2E56C60}"
 	ProjectSection(ProjectDependencies) = postProject
 		{7CCD61E5-5F56-4050-BACC-1467972D2247} = {7CCD61E5-5F56-4050-BACC-1467972D2247}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Simple", "Test\Test_Simple.vcxproj", "{315A0660-7223-41CF-839C-69CF731F8F43}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Simple", "Test\Test_Simple2010.vcxproj", "{315A0660-7223-41CF-839C-69CF731F8F43}"
 	ProjectSection(ProjectDependencies) = postProject
 		{7CCD61E5-5F56-4050-BACC-1467972D2247} = {7CCD61E5-5F56-4050-BACC-1467972D2247}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_UseLibDll", "Test\Test_UseLibDll.vcxproj", "{2B417248-C199-456C-99A3-CD7930E0D6A1}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_UseLibDll", "Test\Test_UseLibDll2010.vcxproj", "{2B417248-C199-456C-99A3-CD7930E0D6A1}"
 	ProjectSection(ProjectDependencies) = postProject
 		{0E8C293B-618B-428B-B1AC-502544B732FB} = {0E8C293B-618B-428B-B1AC-502544B732FB}
 		{78800EB9-3249-4A82-9074-3D68A2E56C60} = {78800EB9-3249-4A82-9074-3D68A2E56C60}
 		{7CCD61E5-5F56-4050-BACC-1467972D2247} = {7CCD61E5-5F56-4050-BACC-1467972D2247}
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Particles", "Test\Test_Particles.vcxproj", "{D29C6982-A589-4081-89B1-91E78D7C41E2}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test_Particles", "Test\Test_Particles2010.vcxproj", "{D29C6982-A589-4081-89B1-91E78D7C41E2}"
 	ProjectSection(ProjectDependencies) = postProject
 		{7CCD61E5-5F56-4050-BACC-1467972D2247} = {7CCD61E5-5F56-4050-BACC-1467972D2247}
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tools", "Tools", "{C8F1FBCF-D704-474A-990B-A42D1F208C41}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "disasm", "disasm.vcxproj", "{D6A7F953-26BF-45F6-92FA-F3B6AB245C1B}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "disasm", "disasm2010.vcxproj", "{D6A7F953-26BF-45F6-92FA-F3B6AB245C1B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
