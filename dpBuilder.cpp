@@ -8,7 +8,6 @@
 dpBuilder::dpBuilder(dpContext *ctx)
     : m_context(ctx)
     , m_build_commands()
-    , m_build_done(false)
     , m_watchfile_stop(false)
     , m_thread_autobuild(nullptr)
     , m_thread_preload(nullptr)
@@ -19,9 +18,10 @@ dpBuilder::dpBuilder(dpContext *ctx)
     case 2008: VCVersion="9.0";  break;
     case 2010: VCVersion="10.0"; break;
     case 2012: VCVersion="11.0"; break;
+    case 2013: VCVersion="12.0"; break;
     default:
-        dpPrintError("unknown VC version (%d). use 2010.\n", dpGetConfig().vc_ver);
-        VCVersion="10.0";
+        dpPrintError("unknown VC version (%d). use 2012.\n", dpGetConfig().vc_ver);
+        VCVersion="11.0";
         break;
     }
 
@@ -155,6 +155,7 @@ void dpBuilder::watchFiles()
         }
         if(needs_build) {
             build();
+            m_context->addCommand(dpCommand(dpE_CmdLoadBinary, ""));
             for(size_t i=0; i<m_srcpathes.size(); ++i) {
                 // ビルドで大量のファイルに変更が加わっていることがあり、以後の FindFirstChangeNotificationA() はそれを検出してしまう。
                 // そうなると永遠にビルドし続けてしまうため、HANDLE ごと作りなおして一度リセットする。
@@ -199,22 +200,43 @@ bool dpBuilder::build()
     }
     ::Sleep(500); // 終了直後だとファイルの書き込みが終わってないことがあるっぽい？ので少し待つ…
 
-    m_build_done = true;
     dpPrintInfo("build succeeded\n");
     return true;
 }
 
-void dpBuilder::update()
+bool dpBuilder::build(const char *build_command, const char *obj)
 {
-    if(m_thread_autobuild) {
-        if(m_build_done) {
-            m_build_done = false;
-            reload();
+    dpPrintInfo("build begin\n");
+
+    {
+        std::string command = m_vcvars;
+        command += " && ";
+        command += build_command;
+
+        STARTUPINFOA si; 
+        PROCESS_INFORMATION pi; 
+        memset(&si, 0, sizeof(si)); 
+        memset(&pi, 0, sizeof(pi)); 
+        si.cb = sizeof(si);
+        if(::CreateProcessA(NULL, (LPSTR)command.c_str(), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)==TRUE) {
+            DWORD exit_code = 0;
+            ::WaitForSingleObject(pi.hThread, INFINITE);
+            ::WaitForSingleObject(pi.hProcess, INFINITE);
+            ::GetExitCodeProcess(pi.hProcess, &exit_code);
+            ::CloseHandle(pi.hThread);
+            ::CloseHandle(pi.hProcess);
+            if(exit_code!=0) {
+                dpPrintError("build failed\n");
+                return false;
+            }
         }
     }
-    else {
-        reload();
-    }
+    ::Sleep(500); // 終了直後だとファイルの書き込みが終わってないことがあるっぽい？ので少し待つ…
+
+    m_context->addCommand(dpCommand(dpE_CmdLoadBinary, obj ? obj : ""));
+
+    dpPrintInfo("build succeeded\n");
+    return true;
 }
 
 size_t dpBuilder::reload()
@@ -230,9 +252,19 @@ size_t dpBuilder::reload()
             }
         });
     }
-    n += dpGetLoader()->reload();
-    dpGetLoader()->link();
     return n;
+}
+
+bool dpBuilder::reload(const char *path)
+{
+    bool ret = false;
+    dpBinary *old = dpGetLoader()->findBinary(path);
+    if(dpBinary *bin = dpGetLoader()->load(path)) {
+        if(bin!=old) {
+            ret = true;
+        }
+    }
+    return ret;
 }
 
 
@@ -243,6 +275,7 @@ static void Preload( LPVOID arg )
 
 void dpBuilder::preload()
 {
+#ifdef dpWithObjFile
     for(size_t pi=0; pi<m_preloadpathes.size(); ++pi) {
         dpGlob(m_preloadpathes[pi].c_str(), [&](const std::string &path){
             if(m_preload_stop) { return; }
@@ -269,6 +302,7 @@ void dpBuilder::preload()
             delete obj;
         });
     }
+#endif // dpWithObjFile
 }
 
 bool dpBuilder::startPreload()

@@ -7,10 +7,6 @@
 
 #ifndef dpDisable
 
-// this option makes dpGetUnpatched() work. and makes dependency for disasm.
-// dpGetUnpatched() returns the function that behaves as old (before patch) function.
-#define dpWithTDisasm
-
 #if _MSC_VER>=1600 // dpPatchByFile() require C++11
 #   define dpWithStdFunction
 #endif // _MSC_VER>=1600
@@ -18,21 +14,27 @@
 #ifdef _M_X64
 #   define dpLibArch "64"
 #else // _M_X64
-#   define dpLibArch 
+#   define dpLibArch "32"
 #endif //_M_X64
-#ifdef _DEBUG
-#   define dpLibConfig "d"
-#else // _DEBUG
-#   define dpLibConfig 
-#endif //_DEBUG
+
+#if   _MSC_VER==1500
+#   define dpVCVersion "vc90"
+#   define dpVCYear    2008
+#elif _MSC_VER==1600
+#   define dpVCVersion "vc100"
+#   define dpVCYear    2010
+#elif _MSC_VER==1700
+#   define dpVCVersion "vc110"
+#   define dpVCYear    2012
+#elif _MSC_VER==1800
+#   define dpVCVersion "vc120"
+#   define dpVCYear    2013
+#endif
 
 
 #if defined(dpDLLImpl)
 #   define dpAPI dpDLLExport
-#elif defined(dpLinkStatic)
-#   define dpAPI
-#   pragma comment(lib,"DynamicPatchers" dpLibConfig dpLibArch ".lib")
-#elif !defined(dpNoLib)
+#elif !defined(dpNoLib) && !defined(dpAlcantarea)
 #   define dpAPI dpDLLImport
 #   pragma comment(lib,"DynamicPatcher" dpLibArch ".lib")
 #else
@@ -85,13 +87,18 @@ enum dpLogLevel {
     dpE_LogNone     = 0,
 };
 enum dpSystemFlags {
-    dpE_SysPatchExports = 0x1, // patch exported (dllexport==dpPatch) functions automatically when modules are loaded
-    dpE_SysDelayedLink  = 0x2,
-    dpE_SysLoadConfig   = 0x4,
-    dpE_SysOpenConsole  = 0x8,
+    dpE_SysPatchExports          = 0x1, // patch exported (dllexport==dpPatch) functions automatically when modules are loaded
+    dpE_SysDelayedLink           = 0x2,
+    dpE_SysLoadConfig            = 0x4,
+    dpE_SysOpenConsole           = 0x8,
+    dpE_SysRunCommunicator       = 0x10,
+    dpE_SysCommunicatorAutoFlush = 0x20,
 
-    dpE_SysDefault = dpE_SysPatchExports|dpE_SysDelayedLink|dpE_SysLoadConfig,
+    dpE_SysDefault = dpE_SysPatchExports | dpE_SysDelayedLink | dpE_SysLoadConfig,
 };
+
+#define dpDefaultCommunicatorPort 14841
+
 
 struct dpConfig
 {
@@ -100,19 +107,12 @@ struct dpConfig
     int vc_ver; // VisualC++ version to use to build. 2008/2010/2012
     const char *configfile;
     unsigned long long starttime;
+    unsigned short communicator_port;
 
-    dpConfig(int log=dpE_LogSimple, int f=dpE_SysDefault, const char *config=NULL)
-        : log_flags(log), sys_flags(f), configfile(config), vc_ver(0), starttime()
+    dpConfig(int log=dpE_LogSimple, int f=dpE_SysDefault, const char *config=NULL, unsigned short com_port=dpDefaultCommunicatorPort)
+        : log_flags(log), sys_flags(f), configfile(config), vc_ver(0), starttime(), communicator_port(com_port)
     {
-#if   _MSC_VER==1500
-        vc_ver = 2008;
-#elif _MSC_VER==1600
-        vc_ver = 2010;
-#elif _MSC_VER==1700
-        vc_ver = 2012;
-#elif _MSC_VER==1800
-        vc_ver = 2013;
-#endif
+        vc_ver = dpVCYear;
     }
 };
 
@@ -164,7 +164,8 @@ dpAPI bool   dpStopPreload();
 dpAPI void   dpUpdate(); // reloads and links modified modules.
 
 dpAPI void          dpPrint(const char* fmt, ...);
-dpAPI bool          dpDemangle(const char *mangled, char *demangled, size_t buflen);
+dpAPI bool          dpDemangleSignatured(const char *mangled, char *demangled, size_t buflen);
+dpAPI bool          dpDemangleNameOnly(const char *mangled, char *demangled, size_t buflen);
 dpAPI const char*   dpGetVCVarsPath();
 
 #else  // dpDisable
@@ -214,7 +215,8 @@ dpAPI const char*   dpGetVCVarsPath();
 #define dpUpdate(...) 
 
 #define dpPrint(...) 
-#define dpDemangle(...) 
+#define dpDemangleSignatured(...) 
+#define dpDemangleNameOnly(...) 
 #define dpGetVCVarsPath(...) 
 
 #endif // dpDisable

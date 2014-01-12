@@ -4,6 +4,7 @@
 
 #include "DynamicPatcher.h"
 #include "dpInternal.h"
+#include "dpCommunicator.h"
 
 #ifdef dpWithTDisasm
 #pragma comment(lib,"disasm" dpLibArch ".lib")
@@ -85,6 +86,13 @@ dpAPI bool dpInitialize(const dpConfig &conf)
         if((g_dpConfig.sys_flags & dpE_SysOpenConsole)!=0) {
             ::AllocConsole();
         }
+        if((g_dpConfig.sys_flags & dpE_SysRunCommunicator)!=0) {
+#ifdef dpWithCommunicator
+            dpInitializeNetwork();
+#endif // dpWithCommunicator
+            bool auto_flush = (g_dpConfig.sys_flags & dpE_SysCommunicatorAutoFlush)!=0;
+            g_dpDefaultContext->runCommunicator(g_dpConfig.communicator_port, auto_flush);
+        }
 
         return true;
     }
@@ -104,10 +112,29 @@ dpAPI bool dpFinalize()
     return false;
 }
 
-dpAPI size_t dpLoad(const char *path)    { return dpGetCurrentContext()->load(path); }
-dpAPI bool   dpLoadObj(const char *path) { return dpGetCurrentContext()->getLoader()->loadObj(path)!=nullptr; }
-dpAPI bool   dpLoadLib(const char *path) { return dpGetCurrentContext()->getLoader()->loadLib(path)!=nullptr; }
-dpAPI bool   dpLoadDll(const char *path) { return dpGetCurrentContext()->getLoader()->loadDll(path)!=nullptr; }
+dpAPI size_t dpLoad(const char *path)    { return dpGetCurrentContext()->loadBinaries(path); }
+
+dpAPI bool   dpLoadObj(const char *path) {
+#ifdef dpWithObjFile
+    return dpGetCurrentContext()->getLoader()->loadObj(path)!=nullptr;
+#else
+    return false;
+#endif // dpWithObjFile
+}
+dpAPI bool   dpLoadLib(const char *path) {
+#ifdef dpWithLibFile
+    return dpGetCurrentContext()->getLoader()->loadLib(path)!=nullptr;
+#else
+    return false;
+#endif // dpWithLibFile
+}
+dpAPI bool   dpLoadDll(const char *path) {
+#ifdef dpWithDllFile
+    return dpGetCurrentContext()->getLoader()->loadDll(path)!=nullptr;
+#else
+    return false;
+#endif // dpWithDllFile
+}
 dpAPI bool   dpUnload(const char *path)  { return dpGetCurrentContext()->getLoader()->unload(path); };
 dpAPI bool   dpLink()                    { return dpGetCurrentContext()->getLoader()->link(); }
 dpAPI size_t dpLoadMapFiles()            { return dpGetCurrentContext()->getLoader()->loadMapFiles(); };
@@ -213,86 +240,10 @@ dpAPI bool dpStopPreload()
 
 dpAPI void dpUpdate()
 {
-    dpGetCurrentContext()->getBuilder()->update();
+    dpGetCurrentContext()->update();
 }
 
 dpAPI const char* dpGetVCVarsPath()
 {
     return dpGetCurrentContext()->getBuilder()->getVCVarsPath();
-}
-
-
-#include <tlhelp32.h>
-
-// F: [](DWORD thread_id)->void
-template<class F>
-inline void dpEnumerateThreads(DWORD pid, const F &f)
-{
-    HANDLE ss = ::CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-    if(ss!=INVALID_HANDLE_VALUE) {
-        THREADENTRY32 te;
-        te.dwSize = sizeof(te);
-        if(::Thread32First(ss, &te)) {
-            do {
-                if(te.dwSize >= FIELD_OFFSET(THREADENTRY32, th32OwnerProcessID)+sizeof(te.th32OwnerProcessID) &&
-                    te.th32OwnerProcessID==pid)
-                {
-                    f(te.th32ThreadID);
-                }
-                te.dwSize = sizeof(te);
-            } while(::Thread32Next(ss, &te));
-        }
-        ::CloseHandle(ss);
-    }
-}
-
-void dpExecExclusive(const std::function<void ()> &f)
-{
-    std::vector<HANDLE> threads;
-    DWORD pid = ::GetCurrentProcessId();
-    dpEnumerateThreads(pid, [&](DWORD tid){
-        if(tid==::GetCurrentThreadId()) { return; }
-        if(HANDLE thread=::OpenThread(THREAD_ALL_ACCESS, FALSE, tid)) {
-            ::SuspendThread(thread);
-            threads.push_back(thread);
-        }
-    });
-    f();
-    std::for_each(threads.begin(), threads.end(), [](HANDLE thread){
-        ::ResumeThread(thread);
-        ::CloseHandle(thread);
-    });
-}
-
-
-bool g_dp_stop_periodic_update = false;
-bool g_dp_periodic_update_running = false;
-
-unsigned __stdcall dpPeriodicUpdate(void *)
-{
-    while(!g_dp_stop_periodic_update) {
-        dpExecExclusive([&](){ dpUpdate(); });
-        ::Sleep(1000);
-    }
-    g_dp_periodic_update_running = false;
-    return 0;
-}
-
-dpAPI void dpBeginPeriodicUpdate()
-{
-    dpExecExclusive([&](){ dpInitialize(); });
-    g_dp_stop_periodic_update = false;
-    g_dp_periodic_update_running = true;
-    // std::thread 使いたいが VS2010 対応を考慮して使わない方向で
-    _beginthreadex(nullptr, 0, &dpPeriodicUpdate, nullptr, 0, nullptr);
-}
-
-dpAPI void dpEndPeriodicUpdate()
-{
-    if(g_dp_periodic_update_running) {
-        g_dp_stop_periodic_update = true;
-        while(!g_dp_periodic_update_running) {
-            ::SwitchToThread();
-        }
-    }
 }

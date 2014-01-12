@@ -35,18 +35,38 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="dpBinary.h" />
+    <ClInclude Include="dpBuilder.h" />
+    <ClInclude Include="dpCommunicator.h" />
+    <ClInclude Include="dpConfigFile.h" />
+    <ClInclude Include="dpContext.h" />
+    <ClInclude Include="dpDllFile.h" />
+    <ClInclude Include="dpFeatures.h" />
+    <ClInclude Include="dpFoundation.h" />
     <ClInclude Include="dpInternal.h" />
+    <ClInclude Include="dpLibFile.h" />
+    <ClInclude Include="dpLoader.h" />
+    <ClInclude Include="dpNetwork.h" />
+    <ClInclude Include="dpObjFile.h" />
+    <ClInclude Include="dpPatcher.h" />
     <ClInclude Include="DynamicPatcher.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dpBinary.cpp" />
     <ClCompile Include="dpBuilder.cpp" />
-    <ClCompile Include="dpConfig.cpp" />
+    <ClCompile Include="dpCommunicator.cpp" />
+    <ClCompile Include="dpConfigFile.cpp" />
     <ClCompile Include="dpContext.cpp" />
+    <ClCompile Include="dpDllFile.cpp" />
     <ClCompile Include="dpFoundation.cpp" />
+    <ClCompile Include="dpLibFile.cpp" />
     <ClCompile Include="dpLoader.cpp" />
+    <ClCompile Include="dpNetwork.cpp" />
+    <ClCompile Include="dpObjFile.cpp" />
     <ClCompile Include="dpPatcher.cpp" />
     <ClCompile Include="DynamicPatcher.cpp" />
+    <ClCompile Include="DynamicPatcherInjector.cpp" />
+    <ClCompile Include="DynamicPatcherInjectorDLL.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{7CCD61E5-5F56-4050-BACC-1467972D2247}</ProjectGuid>

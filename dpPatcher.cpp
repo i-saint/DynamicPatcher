@@ -69,7 +69,7 @@ static size_t dpCopyInstructions(void *dst, void *src, size_t minlen)
 #endif // dpWithTDisasm
 }
 
-static BYTE* dpAddJumpInstruction(BYTE* from, BYTE* to)
+BYTE* dpAddJumpInstruction(BYTE* from, const BYTE* to)
 {
     // 距離が 32bit に収まる範囲であれば、0xe9 RVA
     // そうでない場合、0xff 0x25 [メモリアドレス] + 対象アドレス
@@ -132,15 +132,18 @@ void dpPatcher::patchImpl(dpPatchData &pi)
     pi.unpatched = unpatched;
     pi.unpatched_size = stab_size;
 
-    if((dpGetConfig().log_flags&dpE_LogDetail)!=0) { // たぶん demangle はそこそこでかい処理なので early out
+    if((dpGetConfig().log_flags&dpE_LogInfo)!=0) { // たぶん demangle はそこそこでかい処理なので early out
         char demangled[512];
-        dpDemangle(pi.target->name, demangled, sizeof(demangled));
-        dpPrintDetail("patch 0x%p -> 0x%p (\"%s\" : \"%s\")\n", pi.target->address, pi.hook->address, demangled, pi.target->name);
+        dpDemangleNameOnly(pi.target->name, demangled, sizeof(demangled));
+        dpPrintInfo("patch 0x%p -> 0x%p (\"%s\" : \"%s\")\n", pi.target->address, pi.hook->address, demangled, pi.target->name);
     }
 }
 
 void dpPatcher::unpatchImpl(const dpPatchData &pi)
 {
+    if(!dpIsValidMemory(pi.target->address)) {
+        return;
+    }
     DWORD old;
     ::VirtualProtect(pi.target->address, 32, PAGE_EXECUTE_READWRITE, &old);
     dpCopyInstructions(pi.target->address, pi.unpatched, pi.unpatched_size);
@@ -148,10 +151,10 @@ void dpPatcher::unpatchImpl(const dpPatchData &pi)
     m_talloc.deallocate(pi.unpatched);
     m_talloc.deallocate(pi.trampoline);
 
-    if((dpGetConfig().log_flags&dpE_LogDetail)!=0) {
+    if((dpGetConfig().log_flags&dpE_LogInfo)!=0) {
         char demangled[512];
-        dpDemangle(pi.target->name, demangled, sizeof(demangled));
-        dpPrintDetail("unpatch 0x%p (\"%s\" : \"%s\")\n", pi.target->address, demangled, pi.target->name);
+        dpDemangleNameOnly(pi.target->name, demangled, sizeof(demangled));
+        dpPrintInfo("unpatch 0x%p (\"%s\" : \"%s\")\n", pi.target->address, demangled, pi.target->name);
     }
 }
 

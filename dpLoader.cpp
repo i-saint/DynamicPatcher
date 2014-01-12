@@ -17,15 +17,22 @@ dpSymbol* dpLoader::findHostSymbolByName(const char *name)
         return sym;
     }
 
-    char buf[sizeof(SYMBOL_INFO)+1024];
+    char buf[sizeof(SYMBOL_INFO)+MAX_SYM_NAME+1];
     PSYMBOL_INFO sinfo = (PSYMBOL_INFO)buf;
     sinfo->SizeOfStruct = sizeof(SYMBOL_INFO);
-    sinfo->MaxNameLen = 1024;
-    if(::SymFromName(::GetCurrentProcess(), name, sinfo)==FALSE) {
-        return nullptr;
+    sinfo->MaxNameLen = MAX_SYM_NAME+1;
+
+    bool found = ::SymFromName(::GetCurrentProcess(), name, sinfo)==TRUE;
+#ifdef _M_IX86
+    if(!found && name[0]=='_') {
+        found = ::SymFromName(::GetCurrentProcess(), name+1, sinfo)==TRUE;
     }
-    char *namebuf = new char[sinfo->NameLen+1];
-    strncpy(namebuf, sinfo->Name, sinfo->NameLen+1);
+#endif // _M_IX86
+    if(!found) { return nullptr; }
+
+    size_t namelen = strlen(name)+1;
+    char *namebuf = new char[namelen];
+    memcpy(namebuf, name, namelen);
     m_hostsymbols.addSymbol(newSymbol(namebuf, (void*)sinfo->Address, g_host_symbol_flags, 0, nullptr));
     m_hostsymbols.sort();
     return m_hostsymbols.findSymbolByName(name);
@@ -37,10 +44,10 @@ dpSymbol* dpLoader::findHostSymbolByAddress(void *addr)
         return sym;
     }
 
-    char buf[sizeof(SYMBOL_INFO)+1024];
+    char buf[sizeof(SYMBOL_INFO)+MAX_SYM_NAME+1];
     PSYMBOL_INFO sinfo = (PSYMBOL_INFO)buf;
     sinfo->SizeOfStruct = sizeof(SYMBOL_INFO);
-    sinfo->MaxNameLen = 1024;
+    sinfo->MaxNameLen = MAX_SYM_NAME+1;
     if(::SymFromAddr(::GetCurrentProcess(), (DWORD64)addr, 0, sinfo)==FALSE) {
         return false;
     }
@@ -52,9 +59,31 @@ dpSymbol* dpLoader::findHostSymbolByAddress(void *addr)
 }
 
 
+struct dpDummySymbolData
+{
+    const char *name;
+    void *addr;
+};
+
+#ifdef _M_IX86
+#   define dpSelecyByArch(A,B) A
+#else  // x64
+#   define dpSelecyByArch(A,B) B
+#endif // _M_IX86
+
+
+void __fastcall __security_check_cookie_dummy(UINT_PTR cookie)
+{
+}
+
+dpDummySymbolData g_dpDummySymbols[] = {
+    {dpSelecyByArch("@__security_check_cookie@4", "__security_check_cookie"), &__security_check_cookie_dummy}
+};
+
 dpLoader::dpLoader(dpContext *ctx)
     : m_context(ctx)
 {
+    setupDummySymbols();
     loadMapFiles();
 }
 
@@ -65,16 +94,38 @@ dpLoader::~dpLoader()
     m_hostsymbols.clear();
 }
 
+void dpLoader::setupDummySymbols()
+{
+    for(size_t i=0; i<_countof(g_dpDummySymbols); ++i) {
+        dpDummySymbolData &ds = g_dpDummySymbols[i];
+        dpSymbol *sym = m_hostsymbols.findSymbolByName(ds.name);
+        if(sym==nullptr) {
+            const size_t namelen = strlen(ds.name);
+            char *name = new char[namelen+1];
+            strncpy(name, ds.name, namelen);
+            name[namelen] = '\0';
+            m_hostsymbols.addSymbol(newSymbol(name, ds.addr, g_host_symbol_flags, 0, nullptr));
+        }
+        else {
+            sym->address = ds.addr;
+        }
+    }
+}
+
+
 bool dpLoader::loadMapFile(const char *path, void *imagebase)
 {
     if(m_mapfiles_read.find(path)!=m_mapfiles_read.end()) {
+        dpPrintInfo("loadMapFile(): already loaded. skip: %s\n", path);
         return true;
     }
 
     FILE *file = fopen(path, "rb");
     if(!file) { return false; }
 
-    char line[MAX_SYM_NAME+1];
+    size_t line_max = MAX_SYM_NAME+1024;
+    char *line = (char*)malloc(line_max);
+    line[line_max-1] = '\0';
 
 // C99 から size_t 用の scanf フォーマット %zx が加わったらしいが、VisualC++ は未対応な様子
 #ifdef _WIN64
@@ -86,7 +137,7 @@ bool dpLoader::loadMapFile(const char *path, void *imagebase)
     size_t preferred_addr = 0;
     size_t gap = 0;
     {
-        while(fgets(line, _countof(line), file)) {
+        while(fgets(line, line_max-1, file)) {
             if(sscanf(line, " Preferred load address is " ZX, &preferred_addr)==1) {
                 gap = (size_t)imagebase - preferred_addr;
                 break;
@@ -96,11 +147,12 @@ bool dpLoader::loadMapFile(const char *path, void *imagebase)
     {
         std::regex reg("^ [0-9a-f]{4}:[0-9a-f]{8}       ");
         std::cmatch m;
-        while(fgets(line, _countof(line), file)) {
+        while(fgets(line, line_max-1, file)) {
             if(std::regex_search(line, m, reg)) {
+                size_t line_len = strlen(line);
                 const char *name_src = m[0].second;
-                auto name_end = std::find(name_src, const_cast<const char *>(line+_countof(line)), ' ');
-                auto rva_plus_base_start = std::find_if_not(name_end, const_cast<const char *>(line+_countof(line)), [](char c){ return c == ' '; });
+                auto name_end = std::find(name_src, const_cast<const char *>(line+line_len), ' ');
+                auto rva_plus_base_start = std::find_if_not(name_end, const_cast<const char *>(line+line_len), [](char c){ return c == ' '; });
                 *(const_cast<char *>(rva_plus_base_start)+8) = '\0';
                 size_t rva_plus_base = 0;
                 sscanf(rva_plus_base_start, ZX, &rva_plus_base);
@@ -115,36 +167,44 @@ bool dpLoader::loadMapFile(const char *path, void *imagebase)
             }
         }
     }
+
     m_hostsymbols.sort();
+    free(line);
     fclose(file);
     m_mapfiles_read.insert(path);
+    setupDummySymbols();
+    dpPrintInfo("loadMapFile(): succeeded: %s\n", path);
     return true;
 }
 
 size_t dpLoader::loadMapFiles()
 {
-    std::vector<HMODULE> modules;
-    DWORD num_modules;
-    ::EnumProcessModules(::GetCurrentProcess(), nullptr, 0, &num_modules);
-    modules.resize(num_modules/sizeof(HMODULE));
-    ::EnumProcessModules(::GetCurrentProcess(), &modules[0], num_modules, &num_modules);
     size_t ret = 0;
-    for(size_t i=0; i<modules.size(); ++i) {
+    dpEachModules([&](HMODULE mod){
         char path[MAX_PATH];
-        HMODULE mod = modules[i];
-        ::GetModuleFileNameA(mod, path, _countof(path));
+        ::GetModuleFileNameA(mod, path, sizeof(path));
         std::string mappath = std::regex_replace(std::string(path), std::regex("\\.[^.]+$"), std::string(".map"));
         if(loadMapFile(mappath.c_str(), mod)) {
             ++ret;
         }
-    }
+    });
     return ret;
 }
 
 void dpLoader::unloadImpl( dpBinary *bin )
 {
     m_binaries.erase(std::find(m_binaries.begin(), m_binaries.end(), bin));
+
     bin->callHandler(dpE_OnUnload);
+    if(dpSymbolFilters *filts = dpGetFilters()) {
+        dpSymbolFilter *filt = filts->getFilter(bin->getPath());
+        bin->eachSymbols([&](dpSymbol *sym){
+            if(dpIsFunction(sym->flags) && !dpIsLinkFailed(sym->flags) && filt->matchOnUnload(sym->name)) {
+                ((dpEventHandler)sym->address)();
+            }
+        });
+    }
+
     std::string path = bin->getPath();
     delete bin;
     dpPrintInfo("unloaded \"%s\"\n", path.c_str());
@@ -180,23 +240,37 @@ BinaryType* dpLoader::loadBinaryImpl(const char *path)
     return ret;
 }
 
+#ifdef dpWithObjFile
 dpObjFile* dpLoader::loadObj(const char *path) { return loadBinaryImpl<dpObjFile>(path); }
+#endif // dpWithObjFile
+
+#ifdef dpWithLibFile
 dpLibFile* dpLoader::loadLib(const char *path) { return loadBinaryImpl<dpLibFile>(path); }
+#endif // dpWithLibFile
+
+#ifdef dpWithDllFile
 dpDllFile* dpLoader::loadDll(const char *path) { return loadBinaryImpl<dpDllFile>(path); }
+#endif // dpWithDllFile
 
 dpBinary* dpLoader::load(const char *path)
 {
     size_t len = strlen(path);
     if(len>=4) {
-        if     (_stricmp(&path[len-4], ".obj")==0) {
+#ifdef dpWithObjFile
+        if(_stricmp(&path[len-4], ".obj")==0) {
             return loadObj(path);
         }
-        else if(_stricmp(&path[len-4], ".lib")==0) {
+#endif // dpWithObjFile
+#ifdef dpWithLibFile
+        if(_stricmp(&path[len-4], ".lib")==0) {
             return loadLib(path);
         }
-        else if(_stricmp(&path[len-4], ".dll")==0 || _stricmp(&path[len-4], ".exe")==0) {
+#endif // dpWithLibFile
+#ifdef dpWithDllFile
+        if(_stricmp(&path[len-4], ".dll")==0 || _stricmp(&path[len-4], ".exe")==0) {
             return loadDll(path);
         }
+#endif // dpWithDllFile
     }
     dpPrintError("unrecognized file %s\n", path);
     return nullptr;
@@ -256,8 +330,32 @@ bool dpLoader::link()
             });
         });
     }
+
+    dpSymbolFilters *filts = dpGetFilters();
+    if(filts) {
+        dpEach(m_onload_queue, [&](dpBinary *b){
+            dpSymbolFilter *filt = filts->getFilter(b->getPath());
+            b->eachSymbols([&](dpSymbol *sym){
+                if(filt->matchUpdate(sym->name)) {
+                    sym->partialLink();
+                    dpGetPatcher()->patch(findHostSymbolByName(sym->name), sym);
+                }
+            });
+        });
+    }
+
     // OnLoad があれば呼ぶ
     dpEach(m_onload_queue, [&](dpBinary *b){ b->callHandler(dpE_OnLoad); });
+    if(filts) {
+        dpEach(m_onload_queue, [&](dpBinary *b){
+            dpSymbolFilter *filt = filts->getFilter(b->getPath());
+            b->eachSymbols([&](dpSymbol *sym){
+                if(dpIsFunction(sym->flags) && !dpIsLinkFailed(sym->flags) && filt->matchOnLoad(sym->name)) {
+                    ((dpEventHandler)sym->address)();
+                }
+            });
+        });
+    }
     m_onload_queue.clear();
 
     return ret;
@@ -324,7 +422,7 @@ bool dpLoader::doesForceHostSymbol(const char *name)
     if(m_force_host_symbol_patterns.empty()) { return false; }
 
     char demangled[4096];
-    dpDemangle(name, demangled, sizeof(demangled));
+    dpDemangleNameOnly(name, demangled, sizeof(demangled));
     bool ret = false;
     for(size_t i=0; i<m_force_host_symbol_patterns.size(); ++i) {
         if(std::regex_match(demangled, m_force_host_symbol_patterns[i])) {
