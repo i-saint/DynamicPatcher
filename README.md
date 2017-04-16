@@ -3,15 +3,15 @@ DynamicPatcher
 Runtime C++ Editing library.  
 compile .cpps, load and link .objs (or .libs, .dlls), and update functions at runtime.  
 
-##demo movie  
+## demo movie  
 [![DynamicPatcher demo](http://img.youtube.com/vi/rL1LZjrhJbw/0.jpg)](http://www.youtube.com/watch?v=rL1LZjrhJbw)
 
 
-##detailed description
+## detailed description
 (japanese) http://www.slideshare.net/i-saint/runtime-cediting  
 (japanese) http://i-saint.hatenablog.com/entry/2013/06/06/212515  
 
-##example
+## example
 ```c++
 #include <windows.h> // Sleep()
 #include <cstdio>
@@ -65,10 +65,10 @@ int main()
 // cl /Zi example.cpp && ./example
 ```
 
-##license
+## license
 <img src="http://mirrors.creativecommons.org/presskit/buttons/88x31/png/by.png" alt="CC BY" width="200" height="70" />
 
-##thanks
+## thanks
 DynamicPatcher contains a disassembler (tDisasm) by Matt Conover.  
 [Runtime-Compiled C++](http://runtimecompiledcplusplus.blogspot.com/)  
 [Mhook](http://codefromthe70s.org/mhook23.aspx)  
